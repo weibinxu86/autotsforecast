@@ -10,6 +10,11 @@ from ts_forecast.utils.data import (
     detect_seasonality,
 )
 
+from ts_forecast.utils.preprocessing import (
+    CovariatePreprocessor,
+    auto_preprocess_covariates,
+)
+
 __all__ = [
     "preprocess_data",
     "split_data",
@@ -18,4 +23,6 @@ __all__ = [
     "handle_numerical_covariates",
     "create_sequences",
     "detect_seasonality",
+    "CovariatePreprocessor",
+    "auto_preprocess_covariates",
 ]

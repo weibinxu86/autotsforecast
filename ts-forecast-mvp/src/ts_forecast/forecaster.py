@@ -1,0 +1,325 @@
+"""
+High-level forecasting interface that combines model selection, backtesting, and forecasting.
+"""
+
+import pandas as pd
+import numpy as np
+from typing import List, Optional, Dict, Any, Union
+from .models.base import BaseForecaster
+from .models.selection import ModelSelector
+from .backtesting.validator import BacktestValidator
+
+
+class AutoForecaster:
+    """
+    High-level interface for automatic model selection and forecasting.
+    
+    This class:
+    1. Evaluates candidate models using backtesting
+    2. Selects the best model based on specified metric
+    3. Retrains best model on full dataset
+    4. Generates forecasts for specified horizon
+    
+    Parameters
+    ----------
+    candidate_models : List[BaseForecaster]
+        List of candidate forecasting models to evaluate
+    metric : str, default='rmse'
+        Metric to use for model selection ('rmse', 'mae', 'mape', 'r2')
+    n_splits : int, default=5
+        Number of backtesting splits
+    test_size : int, default=20
+        Size of test set in each backtest split
+    window_type : str, default='expanding'
+        Type of cross-validation window ('expanding' or 'rolling')
+    verbose : bool, default=True
+        Whether to print progress information
+        
+    Attributes
+    ----------
+    best_model_ : BaseForecaster
+        The best performing model after selection
+    cv_results_ : Dict
+        Cross-validation results for all models
+    best_model_name_ : str
+        Name of the best model
+    forecasts_ : pd.DataFrame
+        Generated forecasts (after calling forecast())
+    
+    Examples
+    --------
+    >>> from ts_forecast import AutoForecaster, VARForecaster, MovingAverageForecaster
+    >>> 
+    >>> # Define candidate models
+    >>> candidates = [
+    ...     VARForecaster(lags=1, horizon=30),
+    ...     VARForecaster(lags=3, horizon=30),
+    ...     VARForecaster(lags=7, horizon=30),
+    ...     MovingAverageForecaster(window=7, horizon=30)
+    ... ]
+    >>> 
+    >>> # Create auto forecaster
+    >>> auto = AutoForecaster(
+    ...     candidate_models=candidates,
+    ...     metric='rmse',
+    ...     n_splits=5,
+    ...     test_size=20
+    ... )
+    >>> 
+    >>> # Fit and select best model
+    >>> auto.fit(train_data)
+    >>> 
+    >>> # Generate forecasts
+    >>> forecasts = auto.forecast()
+    >>> 
+    >>> # Get performance summary
+    >>> summary = auto.get_summary()
+    """
+    
+    def __init__(
+        self,
+        candidate_models: List[BaseForecaster],
+        metric: str = 'rmse',
+        n_splits: int = 5,
+        test_size: int = 20,
+        window_type: str = 'expanding',
+        verbose: bool = True
+    ):
+        self.candidate_models = candidate_models
+        self.metric = metric
+        self.n_splits = n_splits
+        self.test_size = test_size
+        self.window_type = window_type
+        self.verbose = verbose
+        
+        # Initialize attributes
+        self.best_model_ = None
+        self.cv_results_ = {}
+        self.best_model_name_ = None
+        self.forecasts_ = None
+        self.is_fitted = False
+        self.feature_names_ = None
+        
+    def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'AutoForecaster':
+        """
+        Evaluate candidate models and select the best one.
+        
+        Parameters
+        ----------
+        y : pd.DataFrame
+            Historical time series data
+        X : pd.DataFrame, optional
+            Exogenous variables (if needed by models)
+            
+        Returns
+        -------
+        self : AutoForecaster
+            Fitted forecaster
+        """
+        if self.verbose:
+            print("="*80)
+            print("AUTO FORECASTER: Model Selection with Backtesting")
+            print("="*80)
+            print(f"\n📊 Data: {len(y)} observations, {y.shape[1]} variables")
+            print(f"🔍 Evaluating {len(self.candidate_models)} candidate models")
+            print(f"📈 Backtesting: {self.n_splits} splits, {self.test_size} test size")
+            print(f"🎯 Selection metric: {self.metric.upper()}")
+            print(f"🔄 Window type: {self.window_type}")
+            print()
+        
+        self.feature_names_ = y.columns.tolist()
+        best_score = float('inf') if self.metric != 'r2' else float('-inf')
+        
+        # Evaluate each candidate model
+        for i, model in enumerate(self.candidate_models, 1):
+            model_name = f"{model.__class__.__name__}"
+            if hasattr(model, 'lags'):
+                model_name += f"(lags={model.lags})"
+            elif hasattr(model, 'window'):
+                model_name += f"(window={model.window})"
+            
+            if self.verbose:
+                print(f"[{i}/{len(self.candidate_models)}] Testing {model_name}...")
+            
+            try:
+                # Create backtesting validator
+                validator = BacktestValidator(
+                    model=model,
+                    n_splits=self.n_splits,
+                    test_size=self.test_size,
+                    window_type=self.window_type
+                )
+                
+                # Run backtesting
+                cv_results = validator.run(y, X)
+                
+                # Store results
+                self.cv_results_[model_name] = cv_results
+                
+                # Get mean metric
+                score = cv_results[self.metric]
+                
+                if self.verbose:
+                    print(f"   {self.metric.upper()}: {score:.4f}")
+                
+                # Update best model
+                is_better = (score < best_score) if self.metric != 'r2' else (score > best_score)
+                if is_better:
+                    best_score = score
+                    self.best_model_ = model
+                    self.best_model_name_ = model_name
+                    
+            except Exception as e:
+                if self.verbose:
+                    print(f"   ⚠️ Error: {str(e)}")
+                continue
+        
+        if self.best_model_ is None:
+            raise ValueError("No valid models found. All candidates failed.")
+        
+        if self.verbose:
+            print()
+            print("="*80)
+            print(f"🏆 BEST MODEL SELECTED: {self.best_model_name_}")
+            print(f"   Performance: {self.metric.upper()} = {best_score:.4f}")
+            print("="*80)
+            print()
+            print("🔄 Retraining best model on full dataset...")
+        
+        # Retrain best model on full dataset
+        self.best_model_.fit(y, X)
+        self.is_fitted = True
+        
+        if self.verbose:
+            print("✅ Training complete!")
+        
+        return self
+    
+    def forecast(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        """
+        Generate forecasts using the best model.
+        
+        Parameters
+        ----------
+        X : pd.DataFrame, optional
+            Future exogenous variables (if required by model)
+            
+        Returns
+        -------
+        forecasts : pd.DataFrame
+            Forecasted values
+        """
+        if not self.is_fitted:
+            raise ValueError("Forecaster must be fitted before forecasting. Call fit() first.")
+        
+        if self.verbose:
+            print("\n🔮 Generating forecasts...")
+        
+        # Generate forecasts
+        self.forecasts_ = self.best_model_.predict(X)
+        
+        if self.verbose:
+            horizon = len(self.forecasts_)
+            print(f"✅ Generated {horizon} step forecast")
+            print(f"   Variables: {', '.join(self.feature_names_)}")
+        
+        return self.forecasts_
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """
+        Get comprehensive summary of model selection and forecasting.
+        
+        Returns
+        -------
+        summary : dict
+            Dictionary containing:
+            - best_model: Name of best model
+            - best_score: Performance score
+            - all_results: Results for all models
+            - forecast_summary: Summary statistics of forecasts
+        """
+        if not self.is_fitted:
+            raise ValueError("Forecaster must be fitted before getting summary.")
+        
+        summary = {
+            'best_model': self.best_model_name_,
+            'best_score': self.cv_results_[self.best_model_name_][f'test_{self.metric}_mean'],
+            'selection_metric': self.metric,
+            'backtesting_config': {
+                'n_splits': self.n_splits,
+                'test_size': self.test_size,
+                'window_type': self.window_type
+            },
+            'all_results': {}
+        }
+        
+        # Add results for all models
+        for model_name, results in self.cv_results_.items():
+            summary['all_results'][model_name] = {
+                'rmse': results['test_rmse_mean'],
+                'mae': results['test_mae_mean'],
+                'r2': results['test_r2_mean'],
+                'rmse_std': results['test_rmse_std'],
+                'mae_std': results['test_mae_std'],
+                'r2_std': results['test_r2_std']
+            }
+        
+        # Add forecast summary if available
+        if self.forecasts_ is not None:
+            forecast_values = self.forecasts_.values
+            summary['forecast_summary'] = {
+                'horizon': len(self.forecasts_),
+                'variables': self.feature_names_,
+                'mean': forecast_values.mean(axis=0).tolist(),
+                'std': forecast_values.std(axis=0).tolist(),
+                'min': forecast_values.min(axis=0).tolist(),
+                'max': forecast_values.max(axis=0).tolist()
+            }
+        
+        return summary
+    
+    def print_summary(self):
+        """Print a formatted summary of results."""
+        summary = self.get_summary()
+        
+        print("\n" + "="*80)
+        print("AUTO FORECASTER SUMMARY")
+        print("="*80)
+        
+        print(f"\n🏆 Best Model: {summary['best_model']}")
+        print(f"   {summary['selection_metric'].upper()}: {summary['best_score']:.4f}")
+        
+        print(f"\n📊 Backtesting Configuration:")
+        print(f"   Splits: {summary['backtesting_config']['n_splits']}")
+        print(f"   Test size: {summary['backtesting_config']['test_size']}")
+        print(f"   Window: {summary['backtesting_config']['window_type']}")
+        
+        print(f"\n📈 All Models Performance:")
+        print(f"{'Model':<40} {'RMSE':<12} {'MAE':<12} {'R²':<12}")
+        print("-" * 80)
+        
+        # Sort by metric
+        sorted_models = sorted(
+            summary['all_results'].items(),
+            key=lambda x: x[1][summary['selection_metric']],
+            reverse=(summary['selection_metric'] == 'r2')
+        )
+        
+        for model_name, metrics in sorted_models:
+            marker = "🏆" if model_name == summary['best_model'] else "  "
+            print(f"{marker} {model_name:<38} {metrics['rmse']:>10.4f}  {metrics['mae']:>10.4f}  {metrics['r2']:>10.4f}")
+        
+        if 'forecast_summary' in summary:
+            print(f"\n🔮 Forecast Summary:")
+            print(f"   Horizon: {summary['forecast_summary']['horizon']} steps")
+            print(f"   Variables: {', '.join(summary['forecast_summary']['variables'])}")
+            print(f"\n   {'Variable':<20} {'Mean':<12} {'Std':<12} {'Min':<12} {'Max':<12}")
+            print("   " + "-" * 68)
+            for i, var in enumerate(summary['forecast_summary']['variables']):
+                print(f"   {var:<20} "
+                      f"{summary['forecast_summary']['mean'][i]:>10.4f}  "
+                      f"{summary['forecast_summary']['std'][i]:>10.4f}  "
+                      f"{summary['forecast_summary']['min'][i]:>10.4f}  "
+                      f"{summary['forecast_summary']['max'][i]:>10.4f}")
+        
+        print("\n" + "="*80)

@@ -1,0 +1,25 @@
+# Optional dependencies for advanced forecasting models
+# Install with: pip install -r requirements-optional.txt
+
+# Machine Learning Models
+xgboost>=2.0.0          # XGBoost gradient boosting
+
+# Time Series Models
+prophet>=1.1.0          # Facebook Prophet for univariate forecasting
+
+# Deep Learning Models
+darts>=0.27.0           # For NHiTS and other neural network models
+torch>=2.0.0            # PyTorch (required by darts)
+lightning>=2.0.0        # PyTorch Lightning (required by darts)
+
+# Note: Installing all optional dependencies may take significant time
+# and disk space. Install only what you need:
+#
+# For XGBoost only:
+#   pip install xgboost
+#
+# For Prophet only:
+#   pip install prophet
+#
+# For NHiTS (neural models):
+#   pip install darts torch lightning
