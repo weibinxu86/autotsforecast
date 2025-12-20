@@ -6,12 +6,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name='autotsforecast',
     version='0.1.0',
-    author='Your Name',
-    author_email='your.email@example.com',
+    author='Weibin Xu',
+    author_email='weibinxu86@gmail.com',
     description='Automated multivariate time series forecasting with model selection, backtesting, hierarchical reconciliation, and SHAP interpretability',
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url='https://github.com/yourusername/autotsforecast',
+    url='https://github.com/weibinxu86/autotsforecast',
     packages=find_packages(where='src'),
     package_dir={'': 'src'},
     install_requires=[

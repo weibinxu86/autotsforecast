@@ -30,7 +30,7 @@ pip install autotsforecast
 ### Development Installation
 
 ```bash
-git clone https://github.com/yourusername/autotsforecast.git
+git clone https://github.com/weibinxu86/autotsforecast.git
 cd autotsforecast
 pip install -e .[all]
 ```
@@ -185,12 +185,14 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ```bibtex
 @software{autotsforecast2025,
   title={AutoTSForecast: Automated Multivariate Time Series Forecasting},
+  author={Weibin Xu},
   year={2025},
-  url={https://github.com/yourusername/autotsforecast}
+  url={https://github.com/weibinxu86/autotsforecast}
 }
 ```
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/autotsforecast/issues)
+- **Issues**: [GitHub Issues](https://github.com/weibinxu86/autotsforecast/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/weibinxu86/autotsforecast/discussions)
 - **Tutorial**: [examples/autotsforecast_tutorial.ipynb](examples/autotsforecast_tutorial.ipynb)
