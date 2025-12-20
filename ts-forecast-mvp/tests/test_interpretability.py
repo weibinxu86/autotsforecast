@@ -1,5 +1,5 @@
 import unittest
-from ts_forecast.interpretability.drivers import DriversAnalyzer
+from autotsforecast.interpretability.drivers import DriversAnalyzer
 
 class TestDriversAnalyzer(unittest.TestCase):
 

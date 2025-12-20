@@ -1,7 +1,20 @@
+"""
+Hierarchical forecast reconciliation for multivariate time series.
+
+Implements multiple reconciliation methods including:
+- Bottom-up: Aggregate from lowest level
+- Top-down: Disaggregate from highest level  
+- MinTrace (OLS, WLS, Shrinkage): Optimal reconciliation with trace minimization
+
+Reference: Wickramasuriya, S. L., Athanasopoulos, G., & Hyndman, R. J. (2019).
+Optimal forecast reconciliation for hierarchical and grouped time series through trace minimization.
+"""
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
-from scipy.linalg import lstsq
+from typing import Dict, List, Optional, Tuple, Union
+from scipy.linalg import lstsq, solve
+from scipy.sparse import csr_matrix
 
 
 class HierarchicalReconciler:

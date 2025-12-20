@@ -3,8 +3,8 @@
 import numpy as np
 import pandas as pd
 import pytest
-from ts_forecast.backtesting.validator import BacktestValidator
-from ts_forecast.models.base import VARForecaster, MovingAverageForecaster
+from autotsforecast.backtesting.validator import BacktestValidator
+from autotsforecast.models.base import VARForecaster, MovingAverageForecaster
 
 
 @pytest.fixture

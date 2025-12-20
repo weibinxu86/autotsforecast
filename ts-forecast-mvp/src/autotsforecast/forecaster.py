@@ -48,7 +48,7 @@ class AutoForecaster:
     
     Examples
     --------
-    >>> from ts_forecast import AutoForecaster, VARForecaster, MovingAverageForecaster
+    >>> from autotsforecast import AutoForecaster, VARForecaster, MovingAverageForecaster
     >>> 
     >>> # Define candidate models
     >>> candidates = [

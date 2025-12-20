@@ -3,16 +3,16 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "ts-forecast"
+name = "autotsforecast"
 version = "0.1.0"
-description = "A package for forecasting multivariate time series with model selection, backtesting, hierarchical forecasting, and interpretability."
+description = "Automated multivariate time series forecasting with model selection, backtesting, hierarchical reconciliation, and SHAP interpretability."
 authors = ["Your Name <youremail@example.com>"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/weibinxu86/tsforecast"
-repository = "https://github.com/weibinxu86/tsforecast"
-keywords = ["time series", "forecasting", "multivariate", "model selection", "backtesting", "interpretability"]
-packages = [{include = "ts_forecast", from = "src"}]
+homepage = "https://github.com/weibinxu86/autotsforecast"
+repository = "https://github.com/weibinxu86/autotsforecast"
+keywords = ["time series", "forecasting", "multivariate", "automated", "hierarchical", "SHAP", "interpretability"]
+packages = [{include = "autotsforecast", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.8"

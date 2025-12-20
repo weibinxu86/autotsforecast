@@ -4,13 +4,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name='ts-forecast',
+    name='autotsforecast',
     version='0.1.0',
     author='Your Name',
     author_email='your.email@example.com',
-    description='Multivariate time series forecasting toolkit with model selection, backtesting, hierarchical forecasting, and interpretability',
+    description='Automated multivariate time series forecasting with model selection, backtesting, hierarchical reconciliation, and SHAP interpretability',
     long_description=long_description,
     long_description_content_type="text/markdown",
+    url='https://github.com/yourusername/autotsforecast',
     packages=find_packages(where='src'),
     package_dir={'': 'src'},
     install_requires=[
@@ -22,16 +23,30 @@ setup(
         'joblib>=1.1.0',
     ],
     extras_require={
+        'all': [
+            'matplotlib>=3.4.0',
+            'seaborn>=0.11.0',
+            'shap>=0.42.0',
+            'xgboost>=1.5.0',
+        ],
+        'viz': [
+            'matplotlib>=3.4.0',
+            'seaborn>=0.11.0',
+        ],
+        'interpret': [
+            'shap>=0.42.0',
+        ],
+        'ml': [
+            'xgboost>=1.5.0',
+        ],
         'dev': [
             'pytest>=7.0.0',
             'pytest-cov>=3.0.0',
             'black>=22.0.0',
             'flake8>=4.0.0',
             'mypy>=0.950',
-        ],
-        'viz': [
-            'matplotlib>=3.4.0',
-            'seaborn>=0.11.0',
+            'jupyter>=1.0.0',
+            'notebook>=6.4.0',
         ],
     },
     classifiers=[

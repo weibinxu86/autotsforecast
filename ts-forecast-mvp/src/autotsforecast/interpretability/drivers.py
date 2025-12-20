@@ -1,8 +1,24 @@
+"""
+Feature importance and interpretability analysis for time series forecasters.
+
+Implements multiple interpretability methods:
+- Coefficient-based: For linear models
+- Permutation importance: Model-agnostic feature shuffling
+- SHAP values: Unified approach to explain model predictions
+- Sensitivity analysis: Impact of feature perturbations
+"""
+
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Union
 from sklearn.inspection import permutation_importance
-from ts_forecast.models.base import BaseForecaster, LinearForecaster
+from autotsforecast.models.base import BaseForecaster, LinearForecaster
+
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except ImportError:
+    SHAP_AVAILABLE = False
 
 
 class DriverAnalyzer:
@@ -250,3 +266,138 @@ class DriverAnalyzer:
             
         except ImportError:
             print("matplotlib not installed. Install it with: pip install matplotlib")
+    
+    def calculate_shap_values(self, X: pd.DataFrame, background_samples: Optional[pd.DataFrame] = None,
+                             max_samples: int = 100) -> Dict[str, np.ndarray]:
+        """Calculate SHAP values for model interpretability
+        
+        Args:
+            X: Feature data to explain
+            background_samples: Background dataset for TreeExplainer (if None, uses X sample)
+            max_samples: Maximum background samples for faster computation
+            
+        Returns:
+            Dictionary mapping target names to SHAP values arrays
+        """
+        if not SHAP_AVAILABLE:
+            raise ImportError("SHAP not installed. Install with: pip install shap")
+        
+        if not self.model.is_fitted:
+            raise ValueError("Model must be fitted first")
+        
+        # Select appropriate explainer based on model type
+        model_class_name = self.model.__class__.__name__
+        
+        # Prepare background data
+        if background_samples is None:
+            if len(X) > max_samples:
+                background_samples = X.sample(n=max_samples, random_state=42)
+            else:
+                background_samples = X
+        
+        shap_values_dict = {}
+        
+        # For tree-based models (RandomForest, XGBoost)
+        if 'RandomForest' in model_class_name or 'XGBoost' in model_class_name:
+            # Get the underlying sklearn models
+            if hasattr(self.model, 'models'):
+                for i, target_col in enumerate(self.model.feature_names):
+                    # Use first horizon model for interpretation
+                    if len(self.model.models) > 0:
+                        horizon_model = self.model.models[0]
+                        
+                        # For MultiOutputRegressor, get the underlying estimator
+                        if hasattr(horizon_model, 'estimators_'):
+                            base_model = horizon_model.estimators_[i]
+                        else:
+                            base_model = horizon_model
+                        
+                        # Create TreeExplainer
+                        explainer = shap.TreeExplainer(base_model, background_samples)
+                        shap_values = explainer.shap_values(X)
+                        shap_values_dict[target_col] = shap_values
+        
+        # For linear models
+        elif 'Linear' in model_class_name or 'VAR' in model_class_name:
+            # Use LinearExplainer for linear models
+            def predict_func(X_input):
+                X_df = pd.DataFrame(X_input, columns=X.columns)
+                return self.model.predict(X_df).values
+            
+            explainer = shap.Explainer(predict_func, background_samples)
+            shap_values = explainer(X)
+            
+            for i, target_col in enumerate(self.model.feature_names):
+                shap_values_dict[target_col] = shap_values.values[:, :, i] if len(shap_values.values.shape) > 2 else shap_values.values
+        
+        # For other models, use KernelExplainer (slower but model-agnostic)
+        else:
+            def predict_func(X_input):
+                X_df = pd.DataFrame(X_input, columns=X.columns)
+                return self.model.predict(X_df).values
+            
+            explainer = shap.KernelExplainer(predict_func, background_samples)
+            shap_values = explainer.shap_values(X, nsamples=100)
+            
+            if isinstance(shap_values, list):
+                for i, target_col in enumerate(self.model.feature_names):
+                    shap_values_dict[target_col] = shap_values[i]
+            else:
+                for i, target_col in enumerate(self.model.feature_names):
+                    shap_values_dict[target_col] = shap_values[:, :, i] if len(shap_values.shape) > 2 else shap_values
+        
+        return shap_values_dict
+    
+    def plot_shap_summary(self, X: pd.DataFrame, shap_values_dict: Optional[Dict] = None,
+                         target_name: Optional[str] = None, plot_type: str = 'dot'):
+        """Plot SHAP summary visualization
+        
+        Args:
+            X: Feature data
+            shap_values_dict: Pre-calculated SHAP values (if None, calculates them)
+            target_name: Specific target to plot (if None, plots first target)
+            plot_type: Type of plot ('dot', 'bar', 'violin')
+        """
+        if not SHAP_AVAILABLE:
+            raise ImportError("SHAP not installed. Install with: pip install shap")
+        
+        if shap_values_dict is None:
+            shap_values_dict = self.calculate_shap_values(X)
+        
+        if target_name is None:
+            target_name = list(shap_values_dict.keys())[0]
+        
+        if target_name not in shap_values_dict:
+            raise ValueError(f"Target {target_name} not found in SHAP values")
+        
+        shap_values = shap_values_dict[target_name]
+        
+        if plot_type == 'dot':
+            shap.summary_plot(shap_values, X, plot_type='dot', show=True)
+        elif plot_type == 'bar':
+            shap.summary_plot(shap_values, X, plot_type='bar', show=True)
+        elif plot_type == 'violin':
+            shap.summary_plot(shap_values, X, plot_type='violin', show=True)
+        else:
+            raise ValueError(f"Unknown plot_type: {plot_type}")
+    
+    def get_shap_feature_importance(self, shap_values_dict: Dict) -> pd.DataFrame:
+        """Calculate mean absolute SHAP values as feature importance
+        
+        Args:
+            shap_values_dict: Dictionary of SHAP values per target
+            
+        Returns:
+            DataFrame with SHAP-based feature importance
+        """
+        importance_dict = {}
+        
+        for target_name, shap_vals in shap_values_dict.items():
+            # Mean absolute SHAP value for each feature
+            mean_abs_shap = np.mean(np.abs(shap_vals), axis=0)
+            importance_dict[target_name] = mean_abs_shap
+        
+        feature_names = self.feature_names if self.feature_names else [f"Feature_{i}" for i in range(len(mean_abs_shap))]
+        df = pd.DataFrame(importance_dict, index=feature_names)
+        
+        return df

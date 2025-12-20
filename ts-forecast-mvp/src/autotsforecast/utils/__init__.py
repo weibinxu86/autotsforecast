@@ -1,6 +1,6 @@
 """Utility functions for data preprocessing and manipulation"""
 
-from ts_forecast.utils.data import (
+from autotsforecast.utils.data import (
     preprocess_data,
     split_data,
     create_time_series_features,
@@ -10,7 +10,7 @@ from ts_forecast.utils.data import (
     detect_seasonality,
 )
 
-from ts_forecast.utils.preprocessing import (
+from autotsforecast.utils.preprocessing import (
     CovariatePreprocessor,
     auto_preprocess_covariates,
 )

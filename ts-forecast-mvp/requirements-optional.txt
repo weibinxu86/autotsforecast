@@ -4,6 +4,9 @@
 # Machine Learning Models
 xgboost>=2.0.0          # XGBoost gradient boosting
 
+# Interpretability
+shap>=0.42.0            # SHAP values for model explanations
+
 # Time Series Models
 prophet>=1.1.0          # Facebook Prophet for univariate forecasting
 

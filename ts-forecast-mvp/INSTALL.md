@@ -40,11 +40,11 @@ pip install -r requirements-dev.txt
 
 ```python
 # Test import
-import ts_forecast
-print(f"TS-Forecast version: {ts_forecast.__version__}")
+import autotsforecast
+print(f"TS-Forecast version: {autotsforecast.__version__}")
 
 # List available classes
-from ts_forecast import (
+from autotsforecast import (
     VARForecaster,
     LinearForecaster,
     ModelSelector,
@@ -62,7 +62,7 @@ print("✅ All modules imported successfully!")
 pytest
 
 # Run with coverage report
-pytest --cov=ts_forecast --cov-report=html
+pytest --cov=autotsforecast --cov-report=html
 
 # Run specific test file
 pytest tests/test_models.py -v
@@ -83,7 +83,7 @@ python examples/quickstart.py
 ```python
 import numpy as np
 import pandas as pd
-from ts_forecast import ModelSelector, VARForecaster
+from autotsforecast import ModelSelector, VARForecaster
 
 # Create sample data
 dates = pd.date_range('2020-01-01', periods=100, freq='D')
@@ -157,7 +157,7 @@ pytest tests/test_models.py::TestVARForecaster::test_fit_predict -v
 ### Add a New Model
 
 ```python
-from ts_forecast.models.base import BaseForecaster
+from autotsforecast.models.base import BaseForecaster
 import pandas as pd
 
 class MyCustomModel(BaseForecaster):
@@ -178,7 +178,7 @@ class MyCustomModel(BaseForecaster):
 ### Customize Model Selection
 
 ```python
-from ts_forecast import ModelSelector, VARForecaster, LinearForecaster
+from autotsforecast import ModelSelector, VARForecaster, LinearForecaster
 
 # Create custom model list
 my_models = [

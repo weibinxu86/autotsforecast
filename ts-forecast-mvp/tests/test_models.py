@@ -3,8 +3,8 @@
 import numpy as np
 import pandas as pd
 import pytest
-from ts_forecast.models.base import BaseForecaster, VARForecaster, LinearForecaster, MovingAverageForecaster
-from ts_forecast.models.selection import ModelSelector
+from autotsforecast.models.base import BaseForecaster, VARForecaster, LinearForecaster, MovingAverageForecaster
+from autotsforecast.models.selection import ModelSelector
 
 
 @pytest.fixture

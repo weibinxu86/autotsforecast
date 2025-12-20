@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from typing import Optional, Dict, List, Tuple
-from ts_forecast.models.base import BaseForecaster
+from autotsforecast.models.base import BaseForecaster
 
 
 class BacktestValidator:

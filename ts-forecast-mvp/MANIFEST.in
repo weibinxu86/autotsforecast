@@ -1,0 +1,13 @@
+# Manifest for source distribution
+include README.md
+include LICENSE
+include CHANGELOG.md
+include requirements.txt
+include requirements-optional.txt
+include requirements-dev.txt
+recursive-include src *.py
+recursive-include examples *.ipynb *.py
+recursive-include tests *.py
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store

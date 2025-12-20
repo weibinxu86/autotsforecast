@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from typing import List, Dict, Any, Optional, Tuple
-from ts_forecast.models.base import BaseForecaster, VARForecaster, LinearForecaster, MovingAverageForecaster
+from autotsforecast.models.base import BaseForecaster, VARForecaster, LinearForecaster, MovingAverageForecaster
 
 
 class ModelSelector:

@@ -148,23 +148,19 @@ class RandomForestForecaster(BaseForecaster):
             X = self.covariate_preprocessor_.transform(X)
         
         # Get last known values for lagging
-        last_values = self.last_values_
+        last_values = self.last_values_.copy()
         predictions = []
         
         for h, model in enumerate(self.models):
-            # Create features for this horizon
-            if h == 0:
-                X_pred = self._create_features_for_prediction(last_values, X)
-            else:
-                # Use previous predictions as lags
-                X_pred = self._create_features_for_prediction(
-                    pd.concat([last_values.iloc[-(self.n_lags-h):], 
-                              pd.DataFrame([predictions[-1]], columns=self.feature_names)]),
-                    X
-                )
+            # Create features for this horizon using CURRENT lag buffer
+            X_pred = self._create_features_for_prediction(last_values, X, step=h)
             
             pred = model.predict(X_pred)
             predictions.append(pred[0])
+            
+            # Update lag buffer with new prediction
+            new_row = pd.DataFrame([pred[0]], columns=self.feature_names)
+            last_values = pd.concat([last_values, new_row], ignore_index=True)
         
         return pd.DataFrame(predictions, columns=self.feature_names)
     
@@ -187,19 +183,23 @@ class RandomForestForecaster(BaseForecaster):
         
         return pd.concat(features, axis=1).dropna()
     
-    def _create_features_for_prediction(self, last_values: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    def _create_features_for_prediction(self, last_values: pd.DataFrame, X: Optional[pd.DataFrame] = None, step: int = 0) -> pd.DataFrame:
         """Create features for prediction"""
         features = []
         
-        # Add lagged values
+        # Add lagged values (use last n_lags rows)
         for lag in range(1, self.n_lags + 1):
             if lag <= len(last_values):
                 lagged = last_values.iloc[-lag]
                 features.extend(lagged.values)
         
-        # Add covariates if provided
-        if X is not None:
-            features.extend(X.iloc[0].values if len(X) > 0 else [])
+        # Add covariates if provided (must match training)
+        if self.covariate_preprocessor_ is not None:
+            if X is not None and len(X) > step:
+                features.extend(X.iloc[step].values)
+            else:
+                # If no covariates provided but model was trained with them, raise error
+                raise ValueError("Model was trained with covariates but none provided for prediction")
         
         return pd.DataFrame([features])
 
@@ -313,21 +313,19 @@ class XGBoostForecaster(BaseForecaster):
         if X is not None and self.covariate_preprocessor_ is not None:
             X = self.covariate_preprocessor_.transform(X)
         
-        last_values = self.last_values_
+        last_values = self.last_values_.copy()
         predictions = []
         
         for h, models_h in enumerate(self.models):
-            if h == 0:
-                X_pred = self._create_features_for_prediction(last_values, X)
-            else:
-                X_pred = self._create_features_for_prediction(
-                    pd.concat([last_values.iloc[-(self.n_lags-h):], 
-                              pd.DataFrame([predictions[-1]], columns=self.feature_names)]),
-                    X
-                )
+            # Create features using current lag buffer
+            X_pred = self._create_features_for_prediction(last_values, X, step=h)
             
             pred_h = [model.predict(X_pred)[0] for model in models_h]
             predictions.append(pred_h)
+            
+            # Update lag buffer with new prediction
+            new_row = pd.DataFrame([pred_h], columns=self.feature_names)
+            last_values = pd.concat([last_values, new_row], ignore_index=True)
         
         return pd.DataFrame(predictions, columns=self.feature_names)
     
@@ -347,7 +345,7 @@ class XGBoostForecaster(BaseForecaster):
         
         return pd.concat(features, axis=1).dropna()
     
-    def _create_features_for_prediction(self, last_values: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    def _create_features_for_prediction(self, last_values: pd.DataFrame, X: Optional[pd.DataFrame] = None, step: int = 0) -> pd.DataFrame:
         """Create features for prediction"""
         features = []
         
@@ -356,8 +354,13 @@ class XGBoostForecaster(BaseForecaster):
                 lagged = last_values.iloc[-lag]
                 features.extend(lagged.values)
         
-        if X is not None:
-            features.extend(X.iloc[0].values if len(X) > 0 else [])
+        # Add covariates if provided (must match training)
+        if self.covariate_preprocessor_ is not None:
+            if X is not None and len(X) > step:
+                features.extend(X.iloc[step].values)
+            else:
+                # If no covariates provided but model was trained with them, raise error
+                raise ValueError("Model was trained with covariates but none provided for prediction")
         
         return pd.DataFrame([features])
 

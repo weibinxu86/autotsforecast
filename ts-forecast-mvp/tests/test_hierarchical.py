@@ -1,5 +1,5 @@
 import unittest
-from ts_forecast.hierarchical.reconciliation import HierarchicalReconciler
+from autotsforecast.hierarchical.reconciliation import HierarchicalReconciler
 
 class TestHierarchicalReconciler(unittest.TestCase):
 

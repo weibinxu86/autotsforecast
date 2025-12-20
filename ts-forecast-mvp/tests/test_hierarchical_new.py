@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from ts_forecast.hierarchical.reconciliation import HierarchicalReconciler
+from autotsforecast.hierarchical.reconciliation import HierarchicalReconciler
 
 
 @pytest.fixture

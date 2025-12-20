@@ -3,8 +3,8 @@
 import numpy as np
 import pandas as pd
 import pytest
-from ts_forecast.interpretability.drivers import DriverAnalyzer
-from ts_forecast.models.base import LinearForecaster
+from autotsforecast.interpretability.drivers import DriverAnalyzer
+from autotsforecast.models.base import LinearForecaster
 
 
 @pytest.fixture
@@ -104,7 +104,7 @@ class TestDriverAnalyzer:
     
     def test_coefficient_importance_linear_only(self, sample_data_with_covariates):
         """Test that coefficient importance only works with LinearForecaster"""
-        from ts_forecast.models.base import VARForecaster
+        from autotsforecast.models.base import VARForecaster
         X, y = sample_data_with_covariates
         
         # VAR model doesn't have coefficients in the same way

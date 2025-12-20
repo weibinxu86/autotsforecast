@@ -1,5 +1,5 @@
 import unittest
-from ts_forecast.backtesting.validator import BacktestValidator
+from autotsforecast.backtesting.validator import BacktestValidator
 
 class TestBacktestValidator(unittest.TestCase):
 
