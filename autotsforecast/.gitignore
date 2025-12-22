@@ -49,3 +49,10 @@ htmlcov/
 *.egg-info/
 dist/
 build/
+
+# Model files (binary, large)
+*.joblib
+*.pkl
+*.pickle
+models/*.joblib
+models/*.pkl
