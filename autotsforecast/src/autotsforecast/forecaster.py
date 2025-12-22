@@ -243,7 +243,7 @@ class AutoForecaster:
         
         summary = {
             'best_model': self.best_model_name_,
-            'best_score': self.cv_results_[self.best_model_name_][f'test_{self.metric}_mean'],
+            'best_score': self.cv_results_[self.best_model_name_][self.metric],
             'selection_metric': self.metric,
             'backtesting_config': {
                 'n_splits': self.n_splits,
@@ -256,12 +256,11 @@ class AutoForecaster:
         # Add results for all models
         for model_name, results in self.cv_results_.items():
             summary['all_results'][model_name] = {
-                'rmse': results['test_rmse_mean'],
-                'mae': results['test_mae_mean'],
-                'r2': results['test_r2_mean'],
-                'rmse_std': results['test_rmse_std'],
-                'mae_std': results['test_mae_std'],
-                'r2_std': results['test_r2_std']
+                'rmse': results['rmse'],
+                'mae': results['mae'],
+                'r2': results['r2'],
+                'mape': results.get('mape', None),
+                'smape': results.get('smape', None)
             }
         
         # Add forecast summary if available
@@ -323,3 +322,57 @@ class AutoForecaster:
                       f"{summary['forecast_summary']['max'][i]:>10.4f}")
         
         print("\n" + "="*80)
+    
+    def save(self, filepath: str):
+        """Save AutoForecaster to disk
+        
+        Args:
+            filepath: Path to save (e.g., 'autoforecaster.pkl')
+            
+        Example:
+            >>> auto.fit(train_data)
+            >>> auto.save('best_autoforecaster.joblib')
+        """
+        import joblib
+        
+        metadata = {
+            'autoforecaster': self,
+            'best_model_name': self.best_model_name_,
+            'cv_results': self.cv_results_,
+            'metric': self.metric,
+            'is_fitted': self.is_fitted,
+            'feature_names': self.feature_names_,
+            'save_timestamp': pd.Timestamp.now()
+        }
+        
+        joblib.dump(metadata, filepath)
+        print(f"✓ AutoForecaster saved to: {filepath}")
+        print(f"  Best Model: {self.best_model_name_}")
+        print(f"  Metric: {self.metric}")
+    
+    @classmethod
+    def load(cls, filepath: str) -> 'AutoForecaster':
+        """Load AutoForecaster from disk
+        
+        Args:
+            filepath: Path to saved AutoForecaster
+            
+        Returns:
+            Loaded AutoForecaster instance
+            
+        Example:
+            >>> auto = AutoForecaster.load('best_autoforecaster.joblib')
+            >>> forecasts = auto.forecast()
+        """
+        import joblib
+        
+        metadata = joblib.load(filepath)
+        auto = metadata['autoforecaster']
+        
+        print(f"✓ AutoForecaster loaded from: {filepath}")
+        print(f"  Best Model: {metadata['best_model_name']}")
+        print(f"  Metric: {metadata['metric']}")
+        print(f"  Saved: {metadata['save_timestamp']}")
+        
+        return auto
+

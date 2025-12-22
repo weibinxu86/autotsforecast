@@ -45,6 +45,59 @@ class BaseForecaster(ABC):
     def get_params(self) -> Dict[str, Any]:
         """Get model parameters"""
         return {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
+    
+    def save(self, filepath: str):
+        """Save model to disk using joblib
+        
+        Args:
+            filepath: Path to save the model (e.g., 'model.pkl' or 'model.joblib')
+            
+        Example:
+            >>> model.fit(train_data)
+            >>> model.save('my_model.joblib')
+        """
+        import joblib
+        from pathlib import Path
+        
+        # Add metadata
+        metadata = {
+            'model': self,
+            'class_name': self.__class__.__name__,
+            'horizon': self.horizon,
+            'is_fitted': self.is_fitted,
+            'feature_names': self.feature_names,
+            'save_timestamp': pd.Timestamp.now()
+        }
+        
+        joblib.dump(metadata, filepath)
+        print(f"✓ Model saved to: {filepath}")
+    
+    @classmethod
+    def load(cls, filepath: str) -> 'BaseForecaster':
+        """Load model from disk
+        
+        Args:
+            filepath: Path to the saved model file
+            
+        Returns:
+            Loaded forecaster model
+            
+        Example:
+            >>> model = RandomForestForecaster.load('my_model.joblib')
+            >>> forecasts = model.predict()
+        """
+        import joblib
+        
+        metadata = joblib.load(filepath)
+        model = metadata['model']
+        
+        print(f"✓ Model loaded from: {filepath}")
+        print(f"  Class: {metadata['class_name']}")
+        print(f"  Horizon: {metadata['horizon']}")
+        print(f"  Fitted: {metadata['is_fitted']}")
+        print(f"  Saved: {metadata['save_timestamp']}")
+        
+        return model
 
 
 class VARForecaster(BaseForecaster):
