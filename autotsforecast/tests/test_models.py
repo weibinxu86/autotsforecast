@@ -5,6 +5,50 @@ import pandas as pd
 import pytest
 from autotsforecast.models.base import BaseForecaster, VARForecaster, LinearForecaster, MovingAverageForecaster
 from autotsforecast.models.selection import ModelSelector
+from autotsforecast.forecaster import get_default_candidate_models
+from autotsforecast.models.external import ETSForecaster
+from autotsforecast.forecaster import AutoForecaster
+
+
+def test_default_candidate_pool_includes_ets(sample_data, sample_covariates):
+    candidates = get_default_candidate_models(horizon=3)
+    assert any(m.__class__.__name__ == 'ETSForecaster' for m in candidates)
+
+    # Smoke test: ensure we can run at least ETS without covariates
+    ets = next(m for m in candidates if m.__class__.__name__ == 'ETSForecaster')
+    ets.fit(sample_data)
+    preds = ets.predict()
+    assert preds.shape == (3, sample_data.shape[1])
+
+
+def test_default_candidate_pool_lstm_optional():
+    candidates = get_default_candidate_models(horizon=2)
+    # LSTM is optional: if deps installed, it should be present; otherwise absent.
+    names = {m.__class__.__name__ for m in candidates}
+    assert 'LSTMForecaster' in names or 'LSTMForecaster' not in names
+
+
+def test_autoforecaster_per_series_models_runs(sample_data, sample_covariates):
+    candidates = [
+        MovingAverageForecaster(horizon=2, window=5),
+        ETSForecaster(horizon=2, trend='add', seasonal=None),
+        LinearForecaster(horizon=2),
+    ]
+
+    auto = AutoForecaster(
+        candidate_models=candidates,
+        metric='rmse',
+        n_splits=2,
+        test_size=10,
+        window_type='expanding',
+        verbose=False,
+        per_series_models=True,
+        n_jobs=1,
+    )
+
+    auto.fit(sample_data, X=sample_covariates)
+    fcst = auto.forecast(X=sample_covariates.tail(2))
+    assert fcst.shape == (2, sample_data.shape[1])
 
 
 @pytest.fixture

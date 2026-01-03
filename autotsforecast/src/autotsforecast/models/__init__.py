@@ -4,7 +4,9 @@ from autotsforecast.models.base import BaseForecaster, VARForecaster, LinearFore
 from autotsforecast.models.selection import ModelSelector
 from autotsforecast.models.external import (
     RandomForestForecaster,
-    XGBoostForecaster
+    XGBoostForecaster,
+    ETSForecaster,
+    LSTMForecaster,
 )
 
 __all__ = [
@@ -14,5 +16,7 @@ __all__ = [
     "MovingAverageForecaster",
     "RandomForestForecaster",
     "XGBoostForecaster",
+    "ETSForecaster",
+    "LSTMForecaster",
     "ModelSelector",
 ]

@@ -6,6 +6,11 @@ from typing import Optional, Dict, Any
 
 class BaseForecaster(ABC):
     """Base class for all forecasting models"""
+
+    # Whether this model uses/accepts exogenous covariates X for fit/predict.
+    # Backtesting and auto-selection logic can use this to avoid passing X to
+    # models that are purely univariate/multivariate-without-exog.
+    supports_covariates: bool = False
     
     def __init__(self, horizon: int = 1):
         self.horizon = horizon
@@ -102,6 +107,8 @@ class BaseForecaster(ABC):
 
 class VARForecaster(BaseForecaster):
     """Vector Autoregression model for multivariate time series"""
+
+    supports_covariates: bool = False
     
     def __init__(self, horizon: int = 1, lags: int = 1, trend: str = 'c'):
         super().__init__(horizon)
@@ -133,6 +140,8 @@ class VARForecaster(BaseForecaster):
 
 class LinearForecaster(BaseForecaster):
     """Linear regression forecaster with exogenous variables"""
+
+    supports_covariates: bool = True
     
     def __init__(self, horizon: int = 1, fit_intercept: bool = True):
         super().__init__(horizon)
@@ -155,10 +164,13 @@ class LinearForecaster(BaseForecaster):
             self.models[target] = []
             for h in range(self.horizon):
                 model = LinearRegression(fit_intercept=self.fit_intercept)
-                # Shift target by h+1 steps
-                y_shifted = y[target].shift(-(h+1))
-                valid_idx = ~y_shifted.isna()
-                model.fit(X[valid_idx], y_shifted[valid_idx])
+                # Shift target by h+1 steps (predict y at t+h+1)
+                y_shifted = y[target].shift(-(h + 1))
+                # Use covariates at forecast time (t+h+1)
+                X_shifted = X.shift(-(h + 1))
+
+                valid_idx = (~y_shifted.isna()) & (~X_shifted.isna().any(axis=1))
+                model.fit(X_shifted.loc[valid_idx], y_shifted.loc[valid_idx])
                 self.models[target].append(model)
         
         self.is_fitted = True
@@ -175,7 +187,11 @@ class LinearForecaster(BaseForecaster):
         
         for target in self.target_names:
             for h, model in enumerate(self.models[target]):
-                pred = model.predict(X.iloc[-1:])
+                if len(X) >= (h + 1):
+                    X_h = X.iloc[h:h + 1]
+                else:
+                    X_h = X.iloc[-1:]
+                pred = model.predict(X_h)
                 predictions[target].append(pred[0])
         
         return pd.DataFrame(predictions)
@@ -183,6 +199,8 @@ class LinearForecaster(BaseForecaster):
 
 class MovingAverageForecaster(BaseForecaster):
     """Simple moving average forecaster"""
+
+    supports_covariates: bool = False
     
     def __init__(self, horizon: int = 1, window: int = 3):
         super().__init__(horizon)

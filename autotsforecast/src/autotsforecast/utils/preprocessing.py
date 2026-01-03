@@ -241,9 +241,9 @@ class CovariatePreprocessor:
     def _handle_missing_values(self, X: pd.DataFrame) -> pd.DataFrame:
         """Handle missing values according to strategy."""
         if self.handle_missing == 'forward_fill':
-            return X.fillna(method='ffill').fillna(method='bfill')
+            return X.ffill().bfill()
         elif self.handle_missing == 'backward_fill':
-            return X.fillna(method='bfill').fillna(method='ffill')
+            return X.bfill().ffill()
         elif self.handle_missing == 'mean':
             return X.fillna(X.mean())
         elif self.handle_missing == 'drop':

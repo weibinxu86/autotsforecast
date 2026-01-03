@@ -57,23 +57,41 @@ class BacktestValidator:
             
             y_train = y.iloc[train_start:train_end]
             y_test = y.iloc[test_start:test_end]
-            
-            X_train = X.iloc[train_start:train_end] if X is not None else None
-            X_test = X.iloc[test_start:test_end] if X is not None else None
-            
-            # Fit model
-            self.model.fit(y_train, X_train)
-            
-            # Generate predictions for test period
-            predictions = []
-            for j in range(len(y_test)):
+
+            # Only use covariates for models that support them.
+            use_covariates = bool(getattr(self.model, 'supports_covariates', False))
+            X_train = X.iloc[train_start:train_end] if (X is not None and use_covariates) else None
+            X_test = X.iloc[test_start:test_end] if (X is not None and use_covariates) else None
+
+            # Fit model and generate predictions for the full test window.
+            # This is required for multi-step models and models that need full-horizon
+            # future covariates (e.g., Prophet with regressors).
+            original_horizon = getattr(self.model, 'horizon', None)
+            try:
+                if original_horizon is not None:
+                    self.model.horizon = len(y_test)
+
+                self.model.fit(y_train, X_train)
+
                 if X_test is not None:
-                    pred = self.model.predict(X_test.iloc[[j]])
+                    predictions = self.model.predict(X_test)
                 else:
-                    pred = self.model.predict()
-                predictions.append(pred.values[0])
-            
-            predictions = pd.DataFrame(predictions, columns=y.columns, index=y_test.index)
+                    predictions = self.model.predict()
+            finally:
+                if original_horizon is not None:
+                    self.model.horizon = original_horizon
+
+            # Normalize output shape/index
+            if len(predictions) != len(y_test):
+                raise ValueError(
+                    f"Model produced {len(predictions)} predictions for a test window of {len(y_test)}"
+                )
+            predictions = predictions.copy()
+            predictions.index = y_test.index
+
+            # Ensure column order matches y
+            if list(predictions.columns) != list(y.columns):
+                predictions = predictions.reindex(columns=y.columns)
             
             all_predictions.append(predictions)
             all_actuals.append(y_test)
@@ -120,9 +138,11 @@ class BacktestValidator:
         metrics['mae'] = float(mae.mean() if isinstance(mae, pd.Series) else mae)
         
         # R-squared
-        ss_res = np.sum((y_true - y_pred) ** 2)
-        ss_tot = np.sum((y_true - y_true.mean()) ** 2)
-        r2 = 1 - (ss_res / ss_tot)
+        err = (y_true - y_pred).to_numpy()
+        denom = (y_true - y_true.mean()).to_numpy()
+        ss_res = float(np.sum(err ** 2))
+        ss_tot = float(np.sum(denom ** 2))
+        r2 = 1 - (ss_res / (ss_tot + epsilon))
         metrics['r2'] = float(r2.mean() if isinstance(r2, pd.Series) else r2)
         
         # SMAPE (Symmetric Mean Absolute Percentage Error)

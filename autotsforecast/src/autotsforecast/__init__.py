@@ -15,12 +15,14 @@ from autotsforecast.models.external import (
     RandomForestForecaster,
     XGBoostForecaster,
     ProphetForecaster,
-    NHiTSForecaster
+    ARIMAForecaster,
+    ETSForecaster,
+    LSTMForecaster
 )
 from autotsforecast.backtesting.validator import BacktestValidator
 from autotsforecast.hierarchical.reconciliation import HierarchicalReconciler
 from autotsforecast.interpretability.drivers import DriverAnalyzer
-from autotsforecast.forecaster import AutoForecaster
+from autotsforecast.forecaster import AutoForecaster, get_default_candidate_models
 
 __all__ = [
     "BaseForecaster",
@@ -30,10 +32,13 @@ __all__ = [
     "RandomForestForecaster",
     "XGBoostForecaster",
     "ProphetForecaster",
-    "NHiTSForecaster",
+    "ARIMAForecaster",
+    "ETSForecaster",
+    "LSTMForecaster",
     "ModelSelector",
     "BacktestValidator",
     "HierarchicalReconciler",
     "AutoForecaster",
+    "get_default_candidate_models",
     "DriverAnalyzer",
 ]

@@ -5,9 +5,43 @@ High-level forecasting interface that combines model selection, backtesting, and
 import pandas as pd
 import numpy as np
 from typing import List, Optional, Dict, Any, Union
+import copy
 from .models.base import BaseForecaster
 from .models.selection import ModelSelector
 from .backtesting.validator import BacktestValidator
+
+
+def get_default_candidate_models(horizon: int) -> List[BaseForecaster]:
+    """Return a default pool of candidate models for `AutoForecaster`.
+
+    Includes a mix of fast baselines, classical models (ETS), and ML models.
+    Optional models (e.g., LSTM) are included only when their dependencies are installed.
+    """
+
+    if horizon < 1:
+        raise ValueError("horizon must be >= 1")
+
+    from .models.base import VARForecaster, MovingAverageForecaster, LinearForecaster
+    from .models.external import RandomForestForecaster, XGBoostForecaster, ETSForecaster, LSTMForecaster
+
+    candidates: List[BaseForecaster] = [
+        MovingAverageForecaster(horizon=horizon, window=5),
+        MovingAverageForecaster(horizon=horizon, window=7),
+        VARForecaster(horizon=horizon, lags=1),
+        VARForecaster(horizon=horizon, lags=2),
+        RandomForestForecaster(horizon=horizon, n_lags=7, n_estimators=100, random_state=42),
+        XGBoostForecaster(horizon=horizon, n_lags=7, n_estimators=100, random_state=42),
+        LinearForecaster(horizon=horizon),
+        ETSForecaster(horizon=horizon, trend='add', seasonal=None),
+    ]
+
+    # Optional deep learning model
+    try:
+        candidates.append(LSTMForecaster(horizon=horizon))
+    except ImportError:
+        pass
+
+    return candidates
 
 
 class AutoForecaster:
@@ -83,7 +117,9 @@ class AutoForecaster:
         n_splits: int = 5,
         test_size: int = 20,
         window_type: str = 'expanding',
-        verbose: bool = True
+        verbose: bool = True,
+        per_series_models: bool = False,
+        n_jobs: int = -1,
     ):
         self.candidate_models = candidate_models
         self.metric = metric
@@ -91,14 +127,50 @@ class AutoForecaster:
         self.test_size = test_size
         self.window_type = window_type
         self.verbose = verbose
+        self.per_series_models = per_series_models
+        self.n_jobs = n_jobs
         
         # Initialize attributes
         self.best_model_ = None
+        self.best_models_ = None
         self.cv_results_ = {}
+        self.cv_results_by_series_ = None
         self.best_model_name_ = None
+        self.best_model_names_ = None
         self.forecasts_ = None
         self.is_fitted = False
         self.feature_names_ = None
+        self._last_index_ = None
+        self._freq_ = None
+
+    def _infer_freq(self, y_index) -> Optional[str]:
+        if not isinstance(y_index, pd.DatetimeIndex):
+            return None
+        freq = pd.infer_freq(y_index)
+        if freq is None and hasattr(y_index, 'freqstr'):
+            freq = y_index.freqstr
+        return freq
+
+    def _future_index(self, horizon: int):
+        if isinstance(self._last_index_, pd.Timestamp):
+            freq = self._freq_ or 'D'
+            return pd.date_range(
+                start=self._last_index_ + pd.tseries.frequencies.to_offset(freq),
+                periods=horizon,
+                freq=freq,
+            )
+        return pd.RangeIndex(start=0, stop=horizon, step=1)
+
+    def _clone_model(self, model: BaseForecaster) -> BaseForecaster:
+        """Best-effort cloning of a candidate model to avoid state bleed between fits."""
+        try:
+            return copy.deepcopy(model)
+        except Exception as e:
+            raise TypeError(
+                f"Failed to clone model {model.__class__.__name__}. "
+                "Please pass fresh model instances or models that can be deep-copied. "
+                f"Original error: {e}"
+            )
         
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'AutoForecaster':
         """
@@ -125,9 +197,87 @@ class AutoForecaster:
             print(f"📈 Backtesting: {self.n_splits} splits, {self.test_size} test size")
             print(f"🎯 Selection metric: {self.metric.upper()}")
             print(f"🔄 Window type: {self.window_type}")
+            if self.per_series_models:
+                print(f"🧩 Per-series selection: enabled ({y.shape[1]} models will be selected)")
+                print(f"⚡ Parallelism: n_jobs={self.n_jobs}")
             print()
         
         self.feature_names_ = y.columns.tolist()
+        self._last_index_ = y.index[-1] if len(y.index) else None
+        self._freq_ = self._infer_freq(y.index)
+
+        # Per-series model selection mode: select a best model for each time series.
+        if self.per_series_models:
+            from joblib import Parallel, delayed
+
+            def fit_one_series(series_name: str):
+                y_single = y[[series_name]]
+
+                best_score = float('inf') if self.metric != 'r2' else float('-inf')
+                best_model = None
+                best_name = None
+                series_cv_results: Dict[str, Any] = {}
+
+                for candidate in self.candidate_models:
+                    # Skip VAR in univariate mode (requires 2+ series)
+                    if candidate.__class__.__name__ == 'VARForecaster':
+                        continue
+
+                    model = self._clone_model(candidate)
+                    model_name = model.__class__.__name__
+                    if hasattr(model, 'lags'):
+                        model_name += f"(lags={getattr(model, 'lags')})"
+                    elif hasattr(model, 'window'):
+                        model_name += f"(window={getattr(model, 'window')})"
+
+                    try:
+                        validator = BacktestValidator(
+                            model=model,
+                            n_splits=self.n_splits,
+                            test_size=self.test_size,
+                            window_type=self.window_type,
+                        )
+                        cv = validator.run(y_single, X)
+                        series_cv_results[model_name] = cv
+                        score = cv[self.metric]
+                        is_better = (score < best_score) if self.metric != 'r2' else (score > best_score)
+                        if is_better:
+                            best_score = score
+                            best_model = model
+                            best_name = model_name
+                    except Exception:
+                        continue
+
+                if best_model is None:
+                    raise ValueError(f"No valid models found for series '{series_name}'.")
+
+                # Retrain best model on full series
+                best_model.fit(y_single, X)
+                return series_name, best_model, best_name, best_score, series_cv_results
+
+            results = Parallel(n_jobs=self.n_jobs)(
+                delayed(fit_one_series)(col) for col in self.feature_names_
+            )
+
+            self.best_models_ = {name: model for name, model, _, _, _ in results}
+            self.best_model_names_ = {name: model_name for name, _, model_name, _, _ in results}
+            self.cv_results_by_series_ = {name: cv for name, _, _, _, cv in results}
+            self.best_model_ = None
+            self.best_model_name_ = 'per-series'
+            self.is_fitted = True
+
+            if self.verbose:
+                print("="*80)
+                print("🏆 PER-SERIES MODELS SELECTED")
+                print("="*80)
+                # Show a short summary (first few)
+                for j, col in enumerate(self.feature_names_[:10], 1):
+                    print(f"  {j}. {col}: {self.best_model_names_[col]}")
+                if len(self.feature_names_) > 10:
+                    print(f"  ... ({len(self.feature_names_)} total)")
+                print()
+
+            return self
         best_score = float('inf') if self.metric != 'r2' else float('-inf')
         
         # Evaluate each candidate model
@@ -216,7 +366,43 @@ class AutoForecaster:
             print("\n🔮 Generating forecasts...")
         
         # Generate forecasts
-        self.forecasts_ = self.best_model_.predict(X)
+        if self.per_series_models:
+            if not self.best_models_:
+                raise ValueError("Per-series forecaster is not fitted. Call fit() first.")
+
+            horizon = None
+            # Determine horizon from any selected model
+            for m in self.best_models_.values():
+                horizon = getattr(m, 'horizon', None)
+                if horizon is not None:
+                    break
+            if horizon is None:
+                raise ValueError("Unable to determine forecast horizon from selected models")
+
+            future_index = self._future_index(horizon)
+            preds: Dict[str, np.ndarray] = {}
+            for col, model in self.best_models_.items():
+                p = model.predict(X)
+                # Accept either single-column df or multi; normalize to 1d array
+                if isinstance(p, pd.DataFrame):
+                    if col in p.columns:
+                        vals = p[col].to_numpy()
+                    else:
+                        vals = p.iloc[:, 0].to_numpy()
+                else:
+                    vals = np.asarray(p)
+                preds[col] = vals
+
+            df = pd.DataFrame(preds)
+            if len(df) != len(future_index):
+                # Best-effort alignment
+                df = df.iloc[: len(future_index)].copy()
+                if len(df) < len(future_index):
+                    df = df.reindex(range(len(future_index)))
+            df.index = future_index
+            self.forecasts_ = df
+        else:
+            self.forecasts_ = self.best_model_.predict(X)
         
         if self.verbose:
             horizon = len(self.forecasts_)
