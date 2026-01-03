@@ -167,6 +167,30 @@ The AutoForecaster typically evaluates these models:
 - **Features:** Lags + covariates
 - **Supports:** Covariate preprocessing
 
+**6. Prophet**
+- **Type:** Facebook's time series forecasting model
+- **Parameters:** `horizon`, `growth`, `seasonality_mode`
+- **Best For:** Business time series with strong seasonal effects and holidays
+- **Features:** Automatic handling of trends, seasonality, and special events
+
+**7. ARIMA**
+- **Type:** AutoRegressive Integrated Moving Average
+- **Parameters:** `order` (p,d,q), `seasonal_order`
+- **Best For:** Classical statistical forecasting, stationary data
+- **Features:** Time-tested approach for univariate and multivariate series
+
+**8. ETS (Error-Trend-Seasonality)**
+- **Type:** Exponential Smoothing State Space
+- **Parameters:** `horizon`, `seasonal`, `seasonal_periods`
+- **Best For:** Time series with trends and seasonal patterns
+- **Features:** Automatic decomposition of trend, seasonality, and error
+
+**9. LSTM (Long Short-Term Memory)**
+- **Type:** Recurrent Neural Network
+- **Parameters:** `n_lags`, `hidden_dim`, `num_layers`
+- **Best For:** Complex temporal dependencies and long-range patterns
+- **Features:** Deep learning architecture for sequence modeling
+
 ### 1.7 Backtesting Implementation
 
 **File:** `src/autotsforecast/backtesting/validator.py`
@@ -209,7 +233,9 @@ class BacktestValidator:
 
 ### 2.1 Overview
 
-The `DriverAnalyzer` class provides interpretability for forecasting models using **SHAP (SHapley Additive exPlanations)** values. This helps understand which features (lags, covariates) drive predictions.
+The `DriverAnalyzer` class provides interpretability for forecasting models using **SHAP (SHapley Additive exPlanations)** values. This helps understand which **external covariates** drive predictions.
+
+**Important:** SHAP analysis focuses exclusively on external covariates (e.g., marketing spend, weather, holidays). Lag features are excluded from interpretability analysis as they are internal time series components.
 
 ### 2.2 What are SHAP Values?
 
@@ -275,9 +301,9 @@ def calculate_shap_values(self, X, background_samples=None, max_samples=100):
 
 ### 2.4 Feature Engineering for Explanation
 
-Before calculating SHAP values, features must be constructed from time series data:
+Before calculating SHAP values, covariate features must be prepared. **Note:** SHAP analysis excludes lag features and only explains the impact of external covariates.
 
-#### Feature Matrix Construction
+#### Feature Matrix for Model Training
 
 For a multivariate time series with $k$ variables and $n$ lags:
 
@@ -302,32 +328,40 @@ Features = [y1_lag1, ..., y1_lagn,
 Total features = k × n + m
 ```
 
+**For SHAP Analysis (Covariates Only):**
+```
+SHAP Features = [cov1, cov2, ..., covm]
+
+Total SHAP features = m
+```
+
 **Example:**
 - 3 target variables (North, South, East)
 - 7 lags
 - 2 covariates (marketing_spend, temperature)
-- **Total features:** 3 × 7 + 2 = **23 features**
+- **Total model features:** 3 × 7 + 2 = **23 features**
+- **SHAP analysis features:** **2 features** (marketing_spend, temperature only)
 
 ### 2.5 Interpretation Workflow
 
 ```
 1. Train Model
    ↓
-2. Extract Feature Matrix
-   - Create lagged features
-   - Add preprocessed covariates
+2. Extract Covariate Features
+   - Filter out lag features
+   - Keep only external covariates
    ↓
 3. Select SHAP Explainer
    - TreeExplainer (RF, XGBoost)
    - LinearExplainer (Linear models)
    - KernelExplainer (Others)
    ↓
-4. Calculate SHAP Values
+4. Calculate SHAP Values (Covariates Only)
    - For each prediction
-   - For each feature
+   - For each covariate feature
    ↓
 5. Aggregate & Visualize
-   - Feature importance ranking
+   - Covariate importance ranking
    - Summary plots
    - Dependence plots
 ```
@@ -385,18 +419,19 @@ class DriverAnalyzer:
 
 #### Feature Importance Ranking
 
-Shows which features contribute most to predictions:
+Shows which covariates contribute most to predictions:
 
 ```
-Feature                 | Avg Importance
+Covariate               | Avg Importance
 ------------------------|---------------
-North_lag1             | 12.45
-marketing_spend        | 8.32
-South_lag1             | 7.91
-temperature            | 5.67
-North_lag2             | 4.23
+marketing_spend        | 12.45
+temperature            | 8.32
+holiday_indicator      | 5.67
+promotion_active       | 4.23
 ...
 ```
+
+**Note:** Lag features (e.g., North_lag1, South_lag2) are excluded from this analysis.
 
 **Interpretation:**
 - `North_lag1`: Most recent North value is most important
@@ -405,15 +440,15 @@ North_lag2             | 4.23
 
 #### SHAP Summary Plot (Dot)
 
-Each row = feature, each dot = sample:
+Each row = covariate feature, each dot = sample:
 - **X-axis:** SHAP value (impact on prediction)
 - **Color:** Feature value (red=high, blue=low)
 - **Pattern:** How feature value affects prediction
 
 **Example Insights:**
 - High marketing spend → higher predictions (red dots on right)
-- Recent lag values have symmetric importance
-- Temperature has non-linear effect
+- Temperature has non-linear effect on sales
+- Holiday indicators show strong positive impact
 
 #### SHAP Summary Plot (Bar)
 
@@ -743,7 +778,7 @@ def predict(self, X=None):
 
 **AutoTSForecast** provides a complete pipeline for multivariate time series forecasting:
 
-1. **Model Selection**: Automated evaluation of 8+ models using backtesting
+1. **Model Selection**: Automated evaluation of 9 models using backtesting
 2. **Interpretability**: SHAP-based explanation for all model types
 3. **Hierarchical Reconciliation**: Optimal methods for forecast coherence
 

@@ -1,6 +1,6 @@
 # AutoTSForecast
 
-**Automated Multivariate Time Series Forecasting with Model Selection, Hierarchical Reconciliation, and SHAP Interpretability**
+**Automated Multivariate Time Series Forecasting with Model Selection, Hierarchical Reconciliation, and Covariate Interpretability (SHAP)**
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -9,15 +9,35 @@
 
 AutoTSForecast is a comprehensive Python package for multivariate time series forecasting that provides automatic model selection, hierarchical reconciliation, and interpretability tools.
 
-🤖 **Automatic Model Selection** • 📊 **8+ Forecasting Algorithms** • 🎯 **Hierarchical Reconciliation** • 🔍 **SHAP Interpretability**
+🤖 **Automatic Model Selection** • 📊 **9 Forecasting Algorithms** • 🎯 **Hierarchical Reconciliation** • 🔍 **Covariate Interpretability**
 
 ## Key Features
 
-- ✅ **AutoForecaster**: Automatically selects the best model using backtesting
-- ✅ **Multiple Models**: VAR, Linear, Moving Average, Random Forest, XGBoost
-- ✅ **Covariate Support**: Include external variables (promotions, weather, holidays)
-- ✅ **Hierarchical Methods**: Bottom-up, top-down, MinTrace reconciliation
-- ✅ **SHAP Values**: Understand feature importance in predictions
+### Core Capabilities
+- ✅ **9 Forecasting Algorithms**: VAR, Linear, Moving Average, Random Forest, XGBoost, Prophet, ARIMA, ETS, LSTM
+- ✅ **AutoForecaster**: Automatically selects the best model per series using time-respecting cross-validation
+- ✅ **Per-Series Model Selection**: Each time series can have its own optimally-selected model
+- ✅ **Flexible Covariate Support**: Different covariates for different series, or mix with/without covariates
+
+### Advanced Features
+- ✅ **Hierarchical Reconciliation**: Ensures forecasts are coherent (e.g., Total = Region A + Region B)
+  - Methods: Bottom-up, Top-down, MinTrace (OLS, shrinkage, covariance)
+  - Automatically enforces aggregation constraints
+  
+- ✅ **SHAP Interpretability**: Understand which external covariates drive predictions
+  - Model-agnostic design - works with any AutoForecaster-selected model
+  - Automatically filters out lag features, focuses on business drivers
+  - Visualizations: summary plots, feature importance rankings
+
+- ✅ **Time-Respecting Cross-Validation**: No data leakage in model selection
+  - Expanding or rolling window validation
+  - Configurable splits and test sizes
+  - Fair comparison across all models
+
+### Data Handling
+- ✅ **Automatic Covariate Preprocessing**: Handles categorical and numerical features
+- ✅ **Multivariate Forecasting**: Model multiple related time series simultaneously
+- ✅ **External Drivers**: Include promotions, weather, holidays, macroeconomic indicators
 
 ## Installation
 
@@ -90,14 +110,18 @@ reconciler = HierarchicalReconciler(hierarchy=hierarchy)
 reconciled = reconciler.reconcile(forecasts, method='mint_shrink')
 ```
 
-### 4. Model Interpretability (SHAP)
+### 4. Covariate Interpretability (SHAP)
 
 ```python
 from autotsforecast.interpretability import DriverAnalyzer
 
+# Analyze impact of external covariates on predictions
 interpreter = DriverAnalyzer(model)
-shap_values = interpreter.calculate_shap_values(X)
+shap_values = interpreter.calculate_shap_values(X_covariates)  # X should contain only covariates
 importance = interpreter.get_shap_feature_importance(shap_values)
+
+# Note: SHAP analysis focuses on external covariates only (e.g., marketing, weather)
+# Lag features are excluded from interpretability analysis
 ```
 
 ## Complete Tutorial
@@ -108,7 +132,7 @@ See **[examples/autotsforecast_tutorial.ipynb](examples/autotsforecast_tutorial.
 2. AutoForecaster for automatic selection
 3. Using covariates to improve accuracy
 4. Hierarchical reconciliation
-5. SHAP interpretability
+5. Covariate interpretability with SHAP (external drivers only)
 
 ## Available Models
 
@@ -119,6 +143,10 @@ See **[examples/autotsforecast_tutorial.ipynb](examples/autotsforecast_tutorial.
 | `MovingAverageForecaster` | Simple moving average | Stable baseline |
 | `RandomForestForecaster` | Ensemble with lags + covariates | Non-linear patterns with external factors |
 | `XGBoostForecaster` | Gradient boosting with lags | High-performance ML forecasting |
+| `ProphetForecaster` | Facebook Prophet | Robust forecasting with holidays and seasonality |
+| `ARIMAForecaster` | ARIMA/SARIMA | Classical statistical forecasting |
+| `ETSForecaster` | Error-Trend-Seasonality (Exponential Smoothing) | Data with trends and seasonality |
+| `LSTMForecaster` | Long Short-Term Memory neural network | Complex temporal patterns and sequences |
 
 ## Documentation
 

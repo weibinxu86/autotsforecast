@@ -194,8 +194,13 @@ analyzer.plot_importance(importance, top_n=10)
 |-------|----------------------|---------------------|-------|------------------|
 | MovingAverage | ✅ | ❌ | ⭐⭐⭐ | ⭐⭐⭐ |
 | VAR | ✅ | ❌ | ⭐⭐ | ⭐⭐ |
+| Linear | ✅ | ✅ | ⭐⭐⭐ | ⭐⭐⭐ |
 | RandomForest | ✅ | ✅ | ⭐⭐ | ⭐⭐ (SHAP) |
 | XGBoost | ✅ | ✅ | ⭐⭐ | ⭐⭐ (SHAP) |
+| Prophet | ✅ | ✅ | ⭐⭐ | ⭐⭐ |
+| ARIMA | ✅ | ✅ | ⭐ | ⭐⭐ |
+| ETS | ✅ | ❌ | ⭐⭐ | ⭐⭐ |
+| LSTM | ✅ | ✅ | ⭐ | ⭐ |
 
 ## Common Parameters
 

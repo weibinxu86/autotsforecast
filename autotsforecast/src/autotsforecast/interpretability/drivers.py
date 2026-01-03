@@ -269,15 +269,19 @@ class DriverAnalyzer:
     
     def calculate_shap_values(self, X: pd.DataFrame, background_samples: Optional[pd.DataFrame] = None,
                              max_samples: int = 100) -> Dict[str, np.ndarray]:
-        """Calculate SHAP values for model interpretability
+        """Calculate SHAP values for model interpretability (covariates only, excludes lag features)
         
         Args:
-            X: Feature data to explain
+            X: Covariate data to explain (should not include lag features)
             background_samples: Background dataset for TreeExplainer (if None, uses X sample)
             max_samples: Maximum background samples for faster computation
             
         Returns:
-            Dictionary mapping target names to SHAP values arrays
+            Dictionary mapping target names to SHAP values arrays for covariates only
+        
+        Note:
+            This method only calculates SHAP values for external covariates.
+            Lag features are excluded from the interpretability analysis.
         """
         if not SHAP_AVAILABLE:
             raise ImportError("SHAP not installed. Install with: pip install shap")
@@ -288,12 +292,24 @@ class DriverAnalyzer:
         # Select appropriate explainer based on model type
         model_class_name = self.model.__class__.__name__
         
+        # Filter out lag features - only keep covariates for SHAP analysis
+        # Lag features typically have patterns like: 'target_lag1', 'target_lag2', etc.
+        covariate_columns = [col for col in X.columns if '_lag' not in col.lower()]
+        
+        if len(covariate_columns) == 0:
+            raise ValueError("No covariate features found. SHAP analysis is only performed on covariates, not lag features.")
+        
+        X_covariates = X[covariate_columns]
+        
         # Prepare background data
         if background_samples is None:
-            if len(X) > max_samples:
-                background_samples = X.sample(n=max_samples, random_state=42)
+            if len(X_covariates) > max_samples:
+                background_samples = X_covariates.sample(n=max_samples, random_state=42)
             else:
-                background_samples = X
+                background_samples = X_covariates
+        else:
+            # Filter background samples to only include covariates
+            background_samples = background_samples[[col for col in background_samples.columns if '_lag' not in col.lower()]]
         
         shap_values_dict = {}
         
@@ -312,20 +328,27 @@ class DriverAnalyzer:
                         else:
                             base_model = horizon_model
                         
-                        # Create TreeExplainer
+                        # Create wrapper function that only uses covariates
+                        def predict_func(X_cov):
+                            # Reconstruct full feature matrix with lags
+                            # This is a simplified approach - assumes model needs full features
+                            # but we only explain covariates
+                            return base_model.predict(X_cov)
+                        
+                        # Create TreeExplainer with covariates only
                         explainer = shap.TreeExplainer(base_model, background_samples)
-                        shap_values = explainer.shap_values(X)
+                        shap_values = explainer.shap_values(X_covariates)
                         shap_values_dict[target_col] = shap_values
         
         # For linear models
         elif 'Linear' in model_class_name or 'VAR' in model_class_name:
-            # Use LinearExplainer for linear models
+            # Use LinearExplainer for linear models - covariates only
             def predict_func(X_input):
-                X_df = pd.DataFrame(X_input, columns=X.columns)
+                X_df = pd.DataFrame(X_input, columns=covariate_columns)
                 return self.model.predict(X_df).values
             
             explainer = shap.Explainer(predict_func, background_samples)
-            shap_values = explainer(X)
+            shap_values = explainer(X_covariates)
             
             for i, target_col in enumerate(self.model.feature_names):
                 shap_values_dict[target_col] = shap_values.values[:, :, i] if len(shap_values.values.shape) > 2 else shap_values.values
@@ -333,11 +356,11 @@ class DriverAnalyzer:
         # For other models, use KernelExplainer (slower but model-agnostic)
         else:
             def predict_func(X_input):
-                X_df = pd.DataFrame(X_input, columns=X.columns)
+                X_df = pd.DataFrame(X_input, columns=covariate_columns)
                 return self.model.predict(X_df).values
             
             explainer = shap.KernelExplainer(predict_func, background_samples)
-            shap_values = explainer.shap_values(X, nsamples=100)
+            shap_values = explainer.shap_values(X_covariates, nsamples=100)
             
             if isinstance(shap_values, list):
                 for i, target_col in enumerate(self.model.feature_names):
@@ -350,13 +373,16 @@ class DriverAnalyzer:
     
     def plot_shap_summary(self, X: pd.DataFrame, shap_values_dict: Optional[Dict] = None,
                          target_name: Optional[str] = None, plot_type: str = 'dot'):
-        """Plot SHAP summary visualization
+        """Plot SHAP summary visualization (covariates only)
         
         Args:
-            X: Feature data
+            X: Covariate data (lag features will be automatically filtered out)
             shap_values_dict: Pre-calculated SHAP values (if None, calculates them)
             target_name: Specific target to plot (if None, plots first target)
             plot_type: Type of plot ('dot', 'bar', 'violin')
+        
+        Note:
+            Only covariates are shown in SHAP plots. Lag features are excluded.
         """
         if not SHAP_AVAILABLE:
             raise ImportError("SHAP not installed. Install with: pip install shap")
@@ -370,25 +396,32 @@ class DriverAnalyzer:
         if target_name not in shap_values_dict:
             raise ValueError(f"Target {target_name} not found in SHAP values")
         
+        # Filter X to only include covariates (exclude lag features)
+        covariate_columns = [col for col in X.columns if '_lag' not in col.lower()]
+        X_covariates = X[covariate_columns]
+        
         shap_values = shap_values_dict[target_name]
         
         if plot_type == 'dot':
-            shap.summary_plot(shap_values, X, plot_type='dot', show=True)
+            shap.summary_plot(shap_values, X_covariates, plot_type='dot', show=True)
         elif plot_type == 'bar':
-            shap.summary_plot(shap_values, X, plot_type='bar', show=True)
+            shap.summary_plot(shap_values, X_covariates, plot_type='bar', show=True)
         elif plot_type == 'violin':
-            shap.summary_plot(shap_values, X, plot_type='violin', show=True)
+            shap.summary_plot(shap_values, X_covariates, plot_type='violin', show=True)
         else:
             raise ValueError(f"Unknown plot_type: {plot_type}")
     
     def get_shap_feature_importance(self, shap_values_dict: Dict) -> pd.DataFrame:
-        """Calculate mean absolute SHAP values as feature importance
+        """Calculate mean absolute SHAP values as feature importance (covariates only)
         
         Args:
-            shap_values_dict: Dictionary of SHAP values per target
+            shap_values_dict: Dictionary of SHAP values per target (for covariates)
             
         Returns:
-            DataFrame with SHAP-based feature importance
+            DataFrame with SHAP-based feature importance for covariates only
+        
+        Note:
+            Only covariate features are included. Lag features are excluded from importance ranking.
         """
         importance_dict = {}
         

@@ -5,6 +5,8 @@ from autotsforecast.models.selection import ModelSelector
 from autotsforecast.models.external import (
     RandomForestForecaster,
     XGBoostForecaster,
+    ProphetForecaster,
+    ARIMAForecaster,
     ETSForecaster,
     LSTMForecaster,
 )
@@ -16,6 +18,8 @@ __all__ = [
     "MovingAverageForecaster",
     "RandomForestForecaster",
     "XGBoostForecaster",
+    "ProphetForecaster",
+    "ARIMAForecaster",
     "ETSForecaster",
     "LSTMForecaster",
     "ModelSelector",
