@@ -17,7 +17,9 @@ AutoTSForecast is a comprehensive Python package for multivariate time series fo
 - ✅ **9 Forecasting Algorithms**: VAR, Linear, Moving Average, Random Forest, XGBoost, Prophet, ARIMA, ETS, LSTM
 - ✅ **AutoForecaster**: Automatically selects the best model per series using time-respecting cross-validation
 - ✅ **Per-Series Model Selection**: Each time series can have its own optimally-selected model
+- ✅ **Parallel Processing**: Fast model selection using all CPU cores (`n_jobs=-1`) via joblib
 - ✅ **Flexible Covariate Support**: Different covariates for different series, or mix with/without covariates
+- ✅ **Automatic Categorical Handling**: One-hot or label encoding for categorical features - no manual preprocessing needed
 
 ### Advanced Features
 - ✅ **Hierarchical Reconciliation**: Ensures forecasts are coherent (e.g., Total = Region A + Region B)
@@ -36,8 +38,20 @@ AutoTSForecast is a comprehensive Python package for multivariate time series fo
 
 ### Data Handling
 - ✅ **Automatic Covariate Preprocessing**: Handles categorical and numerical features
+  - Categorical: One-hot encoding (default) or label encoding
+  - Numerical: Optional scaling with StandardScaler
+  - Auto-detection: Automatically identifies feature types from data
+  - Missing values: Forward fill, backward fill, mean imputation, or drop
 - ✅ **Multivariate Forecasting**: Model multiple related time series simultaneously
 - ✅ **External Drivers**: Include promotions, weather, holidays, macroeconomic indicators
+
+### Performance Optimization
+- ✅ **Parallel Model Selection**: Uses joblib for multi-core processing
+  - Set `n_jobs=-1` to use all CPU cores
+  - Significantly speeds up AutoForecaster with multiple candidate models
+  - Works with both per-series and global model selection
+- ✅ **Efficient Feature Engineering**: Vectorized lag creation and covariate alignment
+- ✅ **Memory-Efficient**: Processes data in chunks where applicable
 
 ## Installation
 
@@ -89,12 +103,39 @@ candidates = [
     # ... add more models
 ]
 
-# AutoForecaster picks the best one
-auto = AutoForecaster(candidate_models=candidates, metric='rmse')
+# AutoForecaster picks the best one using parallel processing
+auto = AutoForecaster(
+    candidate_models=candidates, 
+    metric='rmse',
+    n_jobs=-1  # Use all CPU cores for fast parallel selection
+)
 auto.fit(data)
 forecasts = auto.forecast()
 
 print(f"Best model: {auto.best_model_name_}")
+```
+
+### 3. Using Covariates with Automatic Categorical Handling
+
+```python
+from autotsforecast import RandomForestForecaster
+import pandas as pd
+
+# Your data with both numerical and categorical features
+covariates = pd.DataFrame({
+    'temperature': [20.5, 21.0, 19.8, ...],     # Numerical
+    'promotion': [0, 1, 1, 0, ...],              # Binary
+    'day_of_week': ['Mon', 'Tue', 'Wed', ...],   # Categorical
+    'region': ['North', 'South', 'East', ...]    # Categorical
+})
+
+# Model automatically detects and encodes categorical features
+model = RandomForestForecaster(n_lags=7, horizon=30, preprocess_covariates=True)
+model.fit(data, X=covariates)
+forecasts = model.predict(X_test=covariates_future)
+
+# Categorical features are automatically one-hot encoded
+# No manual preprocessing needed!
 ```
 
 ### 3. Hierarchical Reconciliation
@@ -133,6 +174,72 @@ See **[examples/autotsforecast_tutorial.ipynb](examples/autotsforecast_tutorial.
 3. Using covariates to improve accuracy
 4. Hierarchical reconciliation
 5. Covariate interpretability with SHAP (external drivers only)
+
+## How It Works
+
+### Parallel Processing Architecture
+
+AutoForecaster achieves fast model selection through parallel processing:
+
+1. **Joblib Backend**: Uses `joblib.Parallel` to distribute work across CPU cores
+2. **Per-Series Parallelism**: When `per_series_models=True`, each time series is processed independently in parallel
+3. **Model Evaluation**: Within each series, candidate models are evaluated sequentially (CV folds can be parallelized)
+4. **Resource Management**: Set `n_jobs=-1` to use all available cores, or specify a number (e.g., `n_jobs=4`)
+
+**Performance Gains:**
+- With 3 time series and 9 candidate models: up to 3x speedup on multi-core systems
+- Larger datasets benefit more from parallelization
+- No code changes needed - just set `n_jobs=-1`
+
+### Categorical Feature Handling
+
+Models automatically process categorical features without manual encoding:
+
+1. **Auto-Detection**: Inspects data types and unique value counts
+   - String columns → categorical
+   - Numeric columns with few unique values (< max_categories) → categorical
+   - All others → numerical
+
+2. **Encoding Methods**:
+   - **One-Hot Encoding** (default): Creates binary columns for each category
+     - Example: `['Mon', 'Tue', 'Wed']` → `[Mon_1, Tue_1, Wed_1]`
+   - **Label Encoding**: Maps categories to integers (0, 1, 2, ...)
+     - Use `encoding='label'` for high-cardinality features
+
+3. **Preprocessing Pipeline**:
+   ```python
+   from autotsforecast.utils.preprocessing import CovariatePreprocessor
+   
+   # Customize preprocessing (optional - models do this automatically)
+   preprocessor = CovariatePreprocessor(
+       encoding='onehot',           # or 'label'
+       scale_numerical=False,       # Optional: standardize numerical features
+       handle_missing='forward_fill', # or 'backward_fill', 'mean', 'drop'
+       max_categories=50            # Threshold for categorical detection
+   )
+   X_processed = preprocessor.fit_transform(X)
+   ```
+
+4. **Integration with Models**:
+   - RandomForest and XGBoost: Set `preprocess_covariates=True` (default)
+   - Preprocessing happens automatically during `fit()`
+   - Transformations are saved and applied to test data during `predict()`
+
+**Example Workflow:**
+```python
+# Your raw data with mixed types
+X = pd.DataFrame({
+    'temp': [20, 21, 19],           # Numerical
+    'promo': [0, 1, 0],              # Binary (treated as categorical or numerical)
+    'day': ['Mon', 'Tue', 'Wed'],   # Categorical
+    'store': ['A', 'B', 'A']         # Categorical
+})
+
+# Model handles everything automatically
+model = RandomForestForecaster(n_lags=7, horizon=14)
+model.fit(y_train, X)  # Categorical features auto-encoded internally
+forecasts = model.predict(X_test)  # Same encoding applied to test data
+```
 
 ## Available Models
 
