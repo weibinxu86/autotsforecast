@@ -22,6 +22,7 @@ AutoTSForecast is a comprehensive Python package for multivariate time series fo
 - ✅ **Parallel Processing**: Fast model selection using all CPU cores (`n_jobs=-1`) via joblib
 - ✅ **Flexible Covariate Support**: Different covariates for different series, or mix with/without covariates
 - ✅ **Automatic Categorical Handling**: One-hot or label encoding for categorical features - no manual preprocessing needed
+- ✅ **Independent Backtesting**: Standalone time series cross-validation with expanding/rolling windows
 
 ### Advanced Features
 - ✅ **Hierarchical Reconciliation**: Ensures forecasts are coherent (e.g., Total = Region A + Region B)
@@ -33,10 +34,13 @@ AutoTSForecast is a comprehensive Python package for multivariate time series fo
   - Automatically filters out lag features, focuses on business drivers
   - Visualizations: summary plots, feature importance rankings
 
-- ✅ **Time-Respecting Cross-Validation**: No data leakage in model selection
+- ✅ **Standalone Backtesting Module**: Independent time series cross-validation
+  - Use with ANY forecasting model (not just AutoForecaster)
   - Expanding or rolling window validation
-  - Configurable splits and test sizes
-  - Fair comparison across all models
+  - Comprehensive metrics: RMSE, MAE, MAPE, SMAPE, R²
+  - Automated fold-by-fold analysis with visualizations
+  - Get predictions and actuals for custom analysis
+  - Time-respecting splits (no data leakage)
 
 ### Data Handling
 - ✅ **Automatic Covariate Preprocessing**: Handles categorical and numerical features
@@ -153,7 +157,44 @@ reconciler = HierarchicalReconciler(hierarchy=hierarchy)
 reconciled = reconciler.reconcile(forecasts, method='mint_shrink')
 ```
 
-### 4. Covariate Interpretability (SHAP)
+### 4. Standalone Backtesting (Independent Feature)
+
+```python
+from autotsforecast.backtesting import BacktestValidator
+from autotsforecast import RandomForestForecaster
+
+# Create any forecasting model
+model = RandomForestForecaster(horizon=14, n_lags=7)
+
+# Backtest with expanding window CV
+validator = BacktestValidator(
+    model=model,
+    n_splits=5,           # 5 cross-validation folds
+    test_size=14,         # 14-day test windows
+    window_type='expanding'  # or 'rolling'
+)
+
+# Run backtesting
+metrics = validator.run(y_train, X_train)
+print(f"Average RMSE: {metrics['rmse']:.2f}")
+print(f"Average MAPE: {metrics['mape']:.2f}%")
+
+# Get detailed fold-by-fold results
+fold_results = validator.get_fold_results()
+print(fold_results)
+
+# Get summary statistics
+summary = validator.get_summary()
+print(summary)
+
+# Visualize results
+validator.plot_results()
+
+# Get all predictions and actuals for custom analysis
+actuals, predictions = validator.get_predictions()
+```
+
+### 5. Covariate Interpretability (SHAP)
 
 ```python
 from autotsforecast.interpretability import DriverAnalyzer

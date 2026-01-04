@@ -4,11 +4,11 @@ Complete parameter documentation for all models and classes in AutoTSForecast.
 
 ## Table of Contents
 - [AutoForecaster](#autoforecaster)
+- [Backtesting (Standalone Feature)](#backtesting)
 - [Forecasting Models](#forecasting-models)
 - [Hierarchical Reconciliation](#hierarchical-reconciliation)
 - [Interpretability Tools](#interpretability-tools)
 - [Preprocessing](#preprocessing)
-- [Backtesting](#backtesting)
 
 ---
 
@@ -42,6 +42,119 @@ forecast(X: Optional[pd.DataFrame] = None) -> pd.DataFrame
 ```
 - `X`: Future covariates for forecast period
 - Returns: Forecasts with same columns as training data
+
+---
+
+## Backtesting (Standalone Feature)
+
+### BacktestValidator
+
+**Standalone time series cross-validation tool that works with ANY forecasting model.**
+
+BacktestValidator is an independent feature that can be used separately from AutoForecaster. While AutoForecaster uses backtesting internally for model selection, BacktestValidator allows you to:
+- Validate any single model's performance
+- Get detailed fold-by-fold metrics and statistics
+- Visualize backtesting results automatically
+- Extract predictions and actuals for custom analysis
+- Compare models manually with full transparency
+
+**Key Advantages:**
+- ✅ Works independently with ANY forecaster
+- ✅ Detailed fold-level insights (not just averages)
+- ✅ Automated visualization of performance
+- ✅ Access to raw predictions for custom analysis
+- ✅ Comprehensive metrics: RMSE, MAE, MAPE, SMAPE, R²
+
+**Parameters:**
+
+| Parameter | Type | Default | Allowed Values | Description |
+|-----------|------|---------|----------------|-------------|
+| `model` | BaseForecaster | required | Any forecaster | Model to validate |
+| `n_splits` | int | `5` | 2-10 | Number of CV splits |
+| `test_size` | int | `20` | 1 to dataset_size/2 | Validation window size |
+| `window_type` | str | `'expanding'` | `'expanding'`, `'rolling'` | CV window type (expanding recommended) |
+
+**Methods:**
+
+```python
+run(y: pd.DataFrame, X: pd.DataFrame = None) -> dict
+```
+Run backtesting and return overall metrics.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `y` | pd.DataFrame | required | Target time series |
+| `X` | pd.DataFrame | `None` | Optional covariates |
+| **Returns** | dict | - | Overall metrics: `{'rmse': float, 'mae': float, 'mape': float, 'smape': float, 'r2': float}` |
+
+```python
+get_fold_results() -> pd.DataFrame
+```
+Get detailed results for each fold (train/test sizes, metrics per fold).
+
+```python
+get_summary() -> pd.DataFrame
+```
+Get summary statistics (mean, std, min, max) across all folds for each metric.
+
+```python
+plot_results(figsize: Tuple[int, int] = (15, 10))
+```
+Automatically visualize backtesting results:
+- Metrics by fold (line charts)
+- R² by fold
+- Actual vs Predicted for last fold
+
+```python
+get_predictions() -> Tuple[pd.DataFrame, pd.DataFrame]
+```
+Extract all actuals and predictions from all folds for custom analysis.
+- **Returns**: `(actuals_df, predictions_df)` - concatenated DataFrames from all folds
+
+**Complete Example:**
+```python
+from autotsforecast.backtesting import BacktestValidator
+from autotsforecast import RandomForestForecaster
+
+# Create any forecasting model
+model = RandomForestForecaster(horizon=14, n_lags=7)
+
+# Create validator
+validator = BacktestValidator(
+    model=model,
+    n_splits=5,           # 5 CV folds
+    test_size=14,         # 14-day test windows
+    window_type='expanding'  # Expanding window (recommended)
+)
+
+# Run backtesting
+overall_metrics = validator.run(y_train, X_train)
+print(f"Overall RMSE: {overall_metrics['rmse']:.2f}")
+print(f"Overall MAPE: {overall_metrics['mape']:.2f}%")
+
+# Get fold-by-fold results
+fold_results = validator.get_fold_results()
+print(fold_results[['fold', 'train_size', 'test_size', 'rmse', 'mape']])
+
+# Get summary statistics
+summary = validator.get_summary()
+print(summary)  # Shows mean, std, min, max for each metric
+
+# Visualize results
+validator.plot_results()
+
+# Extract predictions for custom analysis
+actuals, predictions = validator.get_predictions()
+errors = actuals - predictions
+print(f"Mean error: {errors.mean()}")
+```
+
+**Use Cases:**
+1. **Validate a single model**: Understand performance across different time periods
+2. **Manual model comparison**: Compare multiple models with full fold-level transparency
+3. **Performance analysis**: Identify periods where model performs well/poorly
+4. **Custom metrics**: Extract predictions and compute your own metrics
+5. **Reporting**: Generate detailed performance reports with visualizations
 
 ---
 
@@ -416,50 +529,6 @@ preprocessor = CovariatePreprocessor(
 )
 X_processed = preprocessor.fit_transform(X_train)
 X_test_processed = preprocessor.transform(X_test)
-```
-
----
-
-## Backtesting
-
-### BacktestValidator
-
-Time series cross-validation for model evaluation.
-
-**Parameters:**
-
-| Parameter | Type | Default | Allowed Values | Description |
-|-----------|------|---------|----------------|-------------|
-| `model` | BaseForecaster | required | Any forecaster | Model to validate |
-| `n_splits` | int | `5` | 2-10 | Number of CV splits |
-| `test_size` | int | `20` | 1 to dataset_size/2 | Validation window size |
-| `window_type` | str | `'expanding'` | `'expanding'`, `'rolling'` | CV window type |
-
-**Methods:**
-
-```python
-validate(y: pd.DataFrame, X: pd.DataFrame = None, metric: str = 'rmse') -> dict
-```
-
-| Parameter | Type | Default | Allowed Values | Description |
-|-----------|------|---------|----------------|-------------|
-| `y` | pd.DataFrame | required | DataFrame | Target time series |
-| `X` | pd.DataFrame | `None` | DataFrame or None | Covariates |
-| `metric` | str | `'rmse'` | `'rmse'`, `'mae'`, `'mape'`, `'mse'` | Evaluation metric |
-
-**Example:**
-```python
-from autotsforecast.backtesting import BacktestValidator
-
-validator = BacktestValidator(
-    model=model,
-    n_splits=5,
-    test_size=14,
-    window_type='expanding'
-)
-results = validator.validate(y_train, X_train, metric='rmse')
-print(f"Mean RMSE: {results['mean_score']}")
-print(f"Fold scores: {results['fold_scores']}")
 ```
 
 ---

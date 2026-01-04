@@ -9,6 +9,8 @@ This guide helps you quickly find the parameter information you need.
 | Goal | Document | Section |
 |------|----------|---------|
 | See ALL possible parameter values for every function | [API_REFERENCE.md](API_REFERENCE.md) | Entire document |
+| Learn how to use standalone backtesting | [API_REFERENCE.md](API_REFERENCE.md) | "Backtesting (Standalone Feature)" |
+| See backtesting examples in action | [Tutorial](examples/autotsforecast_tutorial.ipynb) | Section 2.5: "Independent Backtesting Module" |
 | Get practical parameter recommendations | [Tutorial](examples/autotsforecast_tutorial.ipynb) | Cell 9: "MODEL PARAMETER GUIDANCE" |
 | See quick parameter examples for common tasks | [QUICKSTART.md](QUICKSTART.md) | "Common Parameters" section |
 | Understand what each model does | [README.md](README.md) | "Available Models" table |
@@ -26,7 +28,16 @@ This guide helps you quickly find the parameter information you need.
 All parameters with allowed values and defaults:
 - `candidate_models`, `metric`, `n_splits`, `test_size`, `window_type`, `verbose`, `per_series_models`, `n_jobs`
 
-### 2. Forecasting Models
+### 2. BacktestValidator (Standalone Backtesting)
+**→ [API_REFERENCE.md - Backtesting Section](API_REFERENCE.md#backtesting)**
+
+Standalone time series cross-validation tool:
+- `model`, `n_splits`, `test_size`, `window_type`
+- Methods: `run()`, `get_fold_results()`, `get_summary()`, `plot_results()`, `get_predictions()`
+- Works independently with ANY forecasting model
+- Get fold-level insights and visualizations
+
+### 3. Forecasting Models
 **→ [API_REFERENCE.md - Forecasting Models Section](API_REFERENCE.md#forecasting-models)**
 
 Complete parameter tables for all 9 models:
@@ -46,7 +57,7 @@ Each model includes:
 - Covariate support status
 - Working code examples
 
-### 3. Hierarchical Reconciliation
+### 4. Hierarchical Reconciliation
 **→ [API_REFERENCE.md - Hierarchical Reconciliation Section](API_REFERENCE.md#hierarchical-reconciliation)**
 
 Parameters and methods:
@@ -54,7 +65,7 @@ Parameters and methods:
 - Hierarchy structure format
 - Usage examples
 
-### 4. Interpretability Tools
+### 5. Interpretability Tools
 **→ [API_REFERENCE.md - Interpretability Tools Section](API_REFERENCE.md#interpretability-tools)**
 
 DriverAnalyzer parameters:
@@ -62,7 +73,7 @@ DriverAnalyzer parameters:
 - SHAP calculation parameters
 - Model compatibility guide
 
-### 5. Preprocessing
+### 6. Preprocessing
 **→ [API_REFERENCE.md - Preprocessing Section](API_REFERENCE.md#preprocessing)**
 
 CovariatePreprocessor parameters:
@@ -70,13 +81,6 @@ CovariatePreprocessor parameters:
 - Missing value handling: `'forward_fill'`, `'backward_fill'`, `'mean'`, `'drop'`
 - Feature detection settings
 - Scaling options
-
-### 6. Backtesting
-**→ [API_REFERENCE.md - Backtesting Section](API_REFERENCE.md#backtesting)**
-
-BacktestValidator parameters:
-- CV settings: `n_splits`, `test_size`, `window_type`
-- Evaluation metrics: `'rmse'`, `'mae'`, `'mape'`, `'mse'`
 
 ---
 
@@ -185,6 +189,41 @@ preprocessor = CovariatePreprocessor(
 )
 X_processed = preprocessor.fit_transform(X_train)
 ```
+
+### 4. "How do I validate my model's performance using backtesting?"
+
+**Step 1:** See complete documentation in [API_REFERENCE.md - BacktestValidator](API_REFERENCE.md#backtesting)
+
+**Step 2:** Use BacktestValidator (works with ANY model independently):
+```python
+from autotsforecast.backtesting import BacktestValidator
+from autotsforecast import RandomForestForecaster
+
+# Create any forecasting model
+model = RandomForestForecaster(horizon=14, n_lags=7)
+
+# Create validator
+validator = BacktestValidator(
+    model=model,
+    n_splits=5,           # 5 CV folds
+    test_size=14,         # 14-day test windows
+    window_type='expanding'  # or 'rolling'
+)
+
+# Run backtesting
+metrics = validator.run(y_train, X_train)
+print(f"RMSE: {metrics['rmse']:.2f}")
+print(f"MAPE: {metrics['mape']:.2f}%")
+
+# Get fold-by-fold details
+fold_results = validator.get_fold_results()
+summary = validator.get_summary()
+
+# Visualize
+validator.plot_results()
+```
+
+**Step 3:** See practical examples in [Tutorial - Section 2.5](examples/autotsforecast_tutorial.ipynb)
 
 ---
 

@@ -92,7 +92,48 @@ predictions = model.predict(X_test)
 
 ## Advanced Features
 
-### 4. Hierarchical Reconciliation
+### 4. Standalone Backtesting (Independent Feature)
+
+BacktestValidator works with ANY forecasting model independently:
+
+```python
+from autotsforecast.backtesting import BacktestValidator
+from autotsforecast import RandomForestForecaster
+
+# Create any forecasting model
+model = RandomForestForecaster(horizon=14, n_lags=7)
+
+# Create backtesting validator
+validator = BacktestValidator(
+    model=model,
+    n_splits=5,           # 5 cross-validation folds
+    test_size=14,         # 14-day test windows
+    window_type='expanding'  # or 'rolling'
+)
+
+# Run backtesting
+metrics = validator.run(y_train, X_train)
+print(f"Overall RMSE: {metrics['rmse']:.2f}")
+print(f"Overall MAPE: {metrics['mape']:.2f}%")
+print(f"Overall R²: {metrics['r2']:.4f}")
+
+# Get detailed fold-by-fold results
+fold_results = validator.get_fold_results()
+print(fold_results[['fold', 'train_size', 'test_size', 'rmse', 'mape']])
+
+# Get summary statistics (mean, std, min, max)
+summary = validator.get_summary()
+print(summary)
+
+# Visualize results automatically
+validator.plot_results()
+
+# Extract predictions for custom analysis
+actuals, predictions = validator.get_predictions()
+errors = actuals - predictions
+```
+
+### 5. Hierarchical Reconciliation
 
 For time series with hierarchical structure (e.g., Total = Region1 + Region2):
 
@@ -127,7 +168,7 @@ print("- mint_cov: MinTrace with covariance weighting")
 print("- mint_shrink: MinTrace with shrinkage (recommended)")
 ```
 
-### 5. SHAP Model Interpretability
+### 6. SHAP Model Interpretability
 
 Explain model predictions using SHAP values:
 
@@ -161,7 +202,7 @@ shap_importance = analyzer.get_shap_feature_importance(shap_values)
 print(shap_importance)
 ```
 
-### 6. Traditional Feature Importance
+### 7. Traditional Feature Importance
 
 For comparison with SHAP:
 
