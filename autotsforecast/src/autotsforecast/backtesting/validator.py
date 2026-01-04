@@ -251,14 +251,6 @@ class BacktestValidator:
         mae = np.mean(np.abs(y_true - y_pred))
         metrics['mae'] = float(mae.mean() if isinstance(mae, pd.Series) else mae)
         
-        # R-squared
-        err = (y_true - y_pred).to_numpy()
-        denom = (y_true - y_true.mean()).to_numpy()
-        ss_res = float(np.sum(err ** 2))
-        ss_tot = float(np.sum(denom ** 2))
-        r2 = 1 - (ss_res / (ss_tot + epsilon))
-        metrics['r2'] = float(r2.mean() if isinstance(r2, pd.Series) else r2)
-        
         # SMAPE (Symmetric Mean Absolute Percentage Error)
         smape = np.mean(2.0 * np.abs(y_true - y_pred) / (np.abs(y_true) + np.abs(y_pred) + epsilon)) * 100
         metrics['smape'] = float(smape.mean() if isinstance(smape, pd.Series) else smape)
@@ -272,7 +264,7 @@ class BacktestValidator:
     def get_summary(self) -> pd.DataFrame:
         """Get summary statistics across all folds"""
         df = self.get_fold_results()
-        metric_cols = ['mape', 'rmse', 'mae', 'r2', 'smape']
+        metric_cols = ['mape', 'rmse', 'mae', 'smape']
         
         summary = df[metric_cols].agg(['mean', 'std', 'min', 'max'])
         return summary
@@ -305,12 +297,12 @@ class BacktestValidator:
             ax1.legend()
             ax1.grid(True, alpha=0.3)
             
-            # Plot 2: R-squared by fold
+            # Plot 2: SMAPE by fold
             ax2 = plt.subplot(2, 2, 2)
-            df.plot(x='fold', y='r2', ax=ax2, marker='o', color='green')
-            ax2.set_title('R² by Fold')
+            df.plot(x='fold', y='smape', ax=ax2, marker='o', color='purple')
+            ax2.set_title('SMAPE by Fold')
             ax2.set_xlabel('Fold')
-            ax2.set_ylabel('R²')
+            ax2.set_ylabel('SMAPE (%)')
             ax2.grid(True, alpha=0.3)
             
             # Plot 3: Actual vs Predicted for last fold
