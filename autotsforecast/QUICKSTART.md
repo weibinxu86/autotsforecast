@@ -204,25 +204,42 @@ analyzer.plot_importance(importance, top_n=10)
 
 ## Common Parameters
 
+For complete parameter documentation, see **[API_REFERENCE.md](API_REFERENCE.md)**.
+
 ### Model Initialization
 - `horizon`: Number of steps to forecast (required)
-- `window`: Window size for moving average (MovingAverage only)
-- `lags`: Number of lags (VAR, RF, XGBoost)
-- `n_estimators`: Number of trees (RF, XGBoost)
+- `window`: 3-30 for moving average (MovingAverage only)
+- `lags`: 1-21 for VAR, 7-30 for RF/XGBoost
+- `n_lags`: Same as lags (used by RF, XGBoost, LSTM)
+- `n_estimators`: 100-500 trees (RF, XGBoost)
+- `max_depth`: 5-10 or None for unlimited (RF, XGBoost)
+- `learning_rate`: 0.01-0.3 (XGBoost only)
+- `seasonal_periods`: 7 (weekly), 12 (monthly) for ETS
+- `order`: (p, d, q) where p,q: 1-5, d: 0-2 (ARIMA)
+- `seasonal_order`: (P, D, Q, s) where s = seasonal period (ARIMA)
 
 ### AutoForecaster
 - `candidate_models`: List of model instances to compare
-- `metric`: Selection metric ('rmse', 'mae', 'mape', 'r2')
-- `n_splits`: Number of cross-validation splits
-- `test_size`: Size of test set in each split
-- `window_type`: 'expanding' or 'rolling'
+- `metric`: Selection metric (`'rmse'`, `'mae'`, `'mape'`, `'mse'`)
+- `n_splits`: 2-5 cross-validation splits (more = better selection, slower)
+- `test_size`: Validation window size (typically = horizon)
+- `window_type`: `'expanding'` (recommended) or `'rolling'`
+- `per_series_models`: `True` (per-series selection) or `False` (global model)
+- `n_jobs`: `-1` for all CPU cores, or specific number (e.g., `4`)
 
 ### HierarchicalReconciler
 - `method`: 
   - `'bottom_up'`: Aggregate from bottom level
   - `'top_down'`: Disaggregate from top (requires proportions)
-  - `'mint_cov'`: MinTrace with covariance
+  - `'mint_ols'`: MinTrace with OLS
   - `'mint_shrink'`: MinTrace with shrinkage (recommended)
+  - `'mint_cov'`: MinTrace with covariance
+
+### CovariatePreprocessor
+- `encoding`: `'onehot'` (default) or `'label'` for categorical features
+- `scale_numerical`: `True` or `False` (standardize numerical features)
+- `handle_missing`: `'forward_fill'`, `'backward_fill'`, `'mean'`, `'drop'`
+- `max_categories`: 50 (threshold for switching to label encoding)
 
 ## Tips
 
@@ -258,5 +275,7 @@ pip install xgboost
 ## Support
 
 For issues and questions:
-- GitHub: https://github.com/weibinxu86/autotsforecast
-- Documentation: See INSTALL.md and examples/forecasting_tutorial.ipynb
+- **[API Reference](API_REFERENCE.md)**: Complete parameter documentation
+- **[Tutorial](examples/autotsforecast_tutorial.ipynb)**: Comprehensive hands-on guide
+- **[GitHub Issues](https://github.com/weibinxu86/autotsforecast/issues)**: Bug reports and questions
+- **[Installation Guide](INSTALL.md)**: Detailed setup instructions

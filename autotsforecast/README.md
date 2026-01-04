@@ -11,6 +11,8 @@ AutoTSForecast is a comprehensive Python package for multivariate time series fo
 
 🤖 **Automatic Model Selection** • 📊 **9 Forecasting Algorithms** • 🎯 **Hierarchical Reconciliation** • 🔍 **Covariate Interpretability**
 
+> 💡 **Looking for parameter values?** See [Parameter Guide](PARAMETER_GUIDE.md) for quick navigation or [API Reference](API_REFERENCE.md) for complete documentation.
+
 ## Key Features
 
 ### Core Capabilities
@@ -257,10 +259,14 @@ forecasts = model.predict(X_test)  # Same encoding applied to test data
 
 ## Documentation
 
-- **[Installation Guide](INSTALL_GUIDE.md)**: Detailed setup instructions
-- **[Quick Start](QUICKSTART.md)**: 5-minute getting started guide
-- **[Changelog](CHANGELOG.md)**: Version history
-- **[Publishing Guide](PUBLISHING.md)**: For maintainers (PyPI distribution)
+- 📘 **[Parameter Guide](PARAMETER_GUIDE.md)**: Quick navigation to find any parameter you need
+- 📕 **[API Reference](API_REFERENCE.md)**: Complete parameter documentation for all models and functions
+- 📗 **[Tutorial](examples/autotsforecast_tutorial.ipynb)**: Comprehensive hands-on guide
+- 📙 **[Quick Start](QUICKSTART.md)**: 5-minute getting started guide
+- 📄 **[Installation Guide](INSTALL.md)**: Detailed setup instructions
+- 📋 **[Changelog](CHANGELOG.md)**: Version history
+- 🔧 **[Technical Documentation](TECHNICAL_DOCUMENTATION.md)**: Architecture and design details
+- 📦 **[Publishing Guide](PUBLISHING.md)**: For maintainers (PyPI distribution)
 
 ## Publishing to PyPI
 
