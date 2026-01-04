@@ -8,10 +8,10 @@ class BacktestValidator:
     """Time series cross-validation and backtesting with expanding/rolling windows
     
     This validator performs time-respecting cross-validation that maximizes training data usage.
-    For n_splits CV folds, the first fold uses maximum available training data, working backwards.
+    For n_splits CV folds, the first fold uses (n - test_size) training points, working backwards.
     
     Example with 226 points, n_splits=3, test_size=14:
-    - Fold 1: Train [0:212] → Validate [212:226]  (most recent data)
+    - Fold 1: Train [0:212] → Validate [212:226]
     - Fold 2: Train [0:198] → Validate [198:212]
     - Fold 3: Train [0:184] → Validate [184:198]
     
@@ -76,8 +76,8 @@ class BacktestValidator:
         
         # Work backwards from end of CV data to maximize training data on first fold
         for i in range(self.n_splits):
-            # Fold 0 (first): validates on last test_size points of CV data [n-k:n]
-            # Fold 1: validates on second-to-last test_size points [n-2k:n-k], etc.
+            # Fold 0 (first): validates on last test_size points of CV data
+            # Fold 1: validates on second-to-last test_size points, etc.
             test_end = len(y_cv) - (i * self.test_size)
             test_start = test_end - self.test_size
             
@@ -172,17 +172,17 @@ class BacktestValidator:
         Example:
             >>> validator = BacktestValidator(model, n_splits=3, test_size=14, holdout_period=14)
             >>> cv_metrics, holdout_metrics = validator.run_with_holdout(y_full, X_full)
-            >>> print(f"CV RMSE: {cv_metrics['rmse']:.2f}")
-            >>> print(f"Holdout RMSE: {holdout_metrics['rmse']:.2f}")
-        """
+            >>> print(f\"CV RMSE: {cv_metrics['rmse']:.2f}\")
+            >>> print(f\"Holdout RMSE: {holdout_metrics['rmse']:.2f}\")
+        \"\"\"
         if self.holdout_period is None:
             raise ValueError(
-                "holdout_period must be specified in __init__ to use run_with_holdout(). "
-                "Either set holdout_period when creating BacktestValidator, or use run() for CV only."
+                \"holdout_period must be specified in __init__ to use run_with_holdout(). \"
+                \"Either set holdout_period when creating BacktestValidator, or use run() for CV only.\"
             )
         
         if len(y) < self.holdout_period:
-            raise ValueError(f"Data length {len(y)} is less than holdout_period {self.holdout_period}")
+            raise ValueError(f\"Data length {len(y)} is less than holdout_period {self.holdout_period}\")
         
         # Step 1: Run CV on training portion (excludes holdout)
         cv_metrics = self.run(y, X)
@@ -218,7 +218,7 @@ class BacktestValidator:
         # Normalize predictions
         if len(holdout_pred) != len(y_holdout):
             raise ValueError(
-                f"Model produced {len(holdout_pred)} predictions for holdout period of {len(y_holdout)}"
+                f\"Model produced {len(holdout_pred)} predictions for holdout period of {len(y_holdout)}\"
             )
         holdout_pred = holdout_pred.copy()
         holdout_pred.index = y_holdout.index
