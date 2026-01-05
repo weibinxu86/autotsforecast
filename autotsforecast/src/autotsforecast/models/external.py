@@ -595,12 +595,16 @@ except ImportError:
 
 
 class ARIMAForecaster(BaseForecaster):
-    """
-
-    supports_covariates: bool = True
-    ARIMA (AutoRegressive Integrated Moving Average) forecaster.
+    """ARIMA (AutoRegressive Integrated Moving Average) forecaster.
     
     Fits separate ARIMA models for each time series in multivariate data.
+    
+    Note: This implementation does NOT use exogenous variables (ARIMAX).
+    For pure time-series forecasting without external covariates.
+    Use LinearForecaster, RandomForest, or XGBoost if you need covariate support.
+    Note: This implementation does NOT use exogenous variables (ARIMAX).
+    For pure time-series forecasting without external covariates.
+    Use LinearForecaster, RandomForest, or XGBoost if you need covariate support.
     
     Parameters
     ----------
@@ -616,6 +620,8 @@ class ARIMAForecaster(BaseForecaster):
     **arima_params : dict
         Additional ARIMA parameters
     """
+    
+    supports_covariates: bool = False
     
     def __init__(
         self,
@@ -634,16 +640,15 @@ class ARIMAForecaster(BaseForecaster):
         self.models = {}
         
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'ARIMAForecaster':
-        """Fit separate ARIMA model for each series"""
+        """Fit separate ARIMA model for each series (ignores X - pure time series)"""
         self.feature_names = y.columns.tolist()
         
-        # Fit an ARIMA model for each column
+        # Fit an ARIMA model for each column (without exogenous variables)
         for col in y.columns:
             model = ARIMA(
                 y[col],
                 order=self.order,
                 seasonal_order=self.seasonal_order,
-                exog=X if X is not None else None,
                 **self.arima_params
             )
             fitted_model = model.fit()
@@ -653,29 +658,15 @@ class ARIMAForecaster(BaseForecaster):
         return self
     
     def predict(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
-        """Generate forecasts using ARIMA"""
+        """Generate forecasts using ARIMA (ignores X - pure time series)"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
         
         predictions = {}
         
-        # Handle covariates: ARIMA needs exog for ALL forecast steps
-        exog_forecast = None
-        if X is not None:
-            if len(X) < self.horizon:
-                # If only one row provided, repeat it for all horizon steps
-                # This handles backtesting case where validator provides one row at a time
-                exog_forecast = pd.concat([X] * self.horizon, ignore_index=True)
-            else:
-                exog_forecast = X.iloc[:self.horizon]
-        
         for col, model in self.models.items():
-            # Generate forecast
-            if exog_forecast is not None:
-                forecast = model.forecast(steps=self.horizon, exog=exog_forecast)
-            else:
-                forecast = model.forecast(steps=self.horizon)
-            
+            # Generate forecast (no exogenous variables)
+            forecast = model.forecast(steps=self.horizon)
             predictions[col] = forecast
         
         # Create future dates
