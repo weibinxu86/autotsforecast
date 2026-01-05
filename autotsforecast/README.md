@@ -20,6 +20,7 @@ AutoTSForecast is a comprehensive Python package for multivariate time series fo
 - ✅ **AutoForecaster**: Automatically selects the best model per series using time-respecting cross-validation
 - ✅ **Per-Series Model Selection**: Each time series can have its own optimally-selected model
 - ✅ **Parallel Processing**: Fast model selection using all CPU cores (`n_jobs=-1`) via joblib
+- ✅ **Confidence Intervals**: User-configurable prediction intervals for uncertainty quantification (50%, 80%, 95%, 99%, etc.)
 - ✅ **Flexible Covariate Support**: Different covariates for different series, or mix with/without covariates
 - ✅ **Automatic Categorical Handling**: One-hot or label encoding for categorical features - no manual preprocessing needed
 - ✅ **Independent Backtesting**: Standalone time series cross-validation with expanding/rolling windows
@@ -116,7 +117,15 @@ auto = AutoForecaster(
     n_jobs=-1  # Use all CPU cores for fast parallel selection
 )
 auto.fit(data)
+
+# Point forecasts
 forecasts = auto.forecast()
+
+# Or get forecasts with confidence intervals (uncertainty quantification)
+results = auto.forecast(return_ci=True, confidence_level=95)
+forecasts = results['forecast']       # Point forecasts
+lower_bounds = results['lower_bound']  # Lower confidence bounds
+upper_bounds = results['upper_bound']  # Upper confidence bounds
 
 print(f"Best model: {auto.best_model_name_}")
 ```

@@ -752,6 +752,257 @@ def predict(self, X=None):
 
 ---
 
+## 5. Confidence Intervals & Uncertainty Quantification
+
+### 5.1 Overview
+
+AutoTSForecast provides **prediction intervals** (confidence intervals) to quantify forecast uncertainty. This allows users to understand not just the point forecast, but also the range of plausible future values.
+
+### 5.2 Methodology
+
+#### Statistical Basis
+
+Confidence intervals are constructed using the **residual distribution** from cross-validation:
+
+```
+1. During CV, collect prediction errors (residuals):
+   residuals = y_actual - y_predicted
+   
+2. Calculate residual standard deviation:
+   σ̂ = std(residuals)
+   
+3. For confidence level α (e.g., 95%):
+   z = quantile((1 + α/100) / 2)  # e.g., 1.96 for 95%
+   
+4. Construct intervals:
+   lower_bound = forecast - z * σ̂
+   upper_bound = forecast + z * σ̂
+```
+
+#### Confidence Levels
+
+Common confidence levels and their z-scores:
+
+| Confidence Level | z-score | Coverage | Use Case |
+|-----------------|---------|----------|----------|
+| 50% | 0.674 | Narrow | High-confidence, short-term |
+| 68% | 1.000 | Moderate | ~1 standard deviation |
+| 80% | 1.282 | Moderate-Wide | Business planning |
+| 90% | 1.645 | Wide | Risk management |
+| 95% | 1.960 | Wide | Standard reporting |
+| 99% | 2.576 | Very Wide | Conservative estimates |
+
+### 5.3 Implementation
+
+**File:** `src/autotsforecast/forecaster.py`
+
+```python
+def forecast(self, X=None, return_ci=False, confidence_level=95):
+    """
+    Generate forecasts with optional confidence intervals.
+    
+    Parameters:
+    -----------
+    X : pd.DataFrame, optional
+        Future covariates
+    return_ci : bool, default=False
+        If True, return confidence intervals
+    confidence_level : float, default=95
+        Confidence level (e.g., 50, 80, 95, 99)
+        
+    Returns:
+    --------
+    If return_ci=False:
+        pd.DataFrame: Point forecasts
+        
+    If return_ci=True:
+        dict: {
+            'forecast': Point forecasts (DataFrame),
+            'lower_bound': Lower confidence bounds (DataFrame),
+            'upper_bound': Upper confidence bounds (DataFrame)
+        }
+    """
+    # Generate point forecasts
+    point_forecast = self.best_model_.predict(X)
+    
+    if not return_ci:
+        return point_forecast
+    
+    # Calculate confidence intervals from CV residuals
+    residuals = self._get_cv_residuals()
+    sigma = np.std(residuals, axis=0)  # Per-series std
+    
+    # Get z-score for confidence level
+    from scipy.stats import norm
+    alpha = confidence_level / 100
+    z = norm.ppf((1 + alpha) / 2)
+    
+    # Construct intervals
+    margin = z * sigma
+    lower_bound = point_forecast - margin
+    upper_bound = point_forecast + margin
+    
+    return {
+        'forecast': point_forecast,
+        'lower_bound': lower_bound,
+        'upper_bound': upper_bound
+    }
+```
+
+### 5.4 Model-Specific Considerations
+
+#### Tree-Based Models (RandomForest, XGBoost)
+
+- **Residual-based intervals**: Use CV residuals as described above
+- **Quantile Regression** (alternative): Train separate models for different quantiles
+  - Lower quantile (e.g., 2.5th percentile for 95% CI)
+  - Median (50th percentile)
+  - Upper quantile (e.g., 97.5th percentile)
+
+#### Statistical Models (ARIMA, ETS, Prophet)
+
+- **Native intervals**: These models have built-in uncertainty estimation
+- **Method**: Use model-specific prediction intervals when available
+- **Fallback**: Use residual-based method if native intervals not available
+
+#### Neural Networks (LSTM)
+
+- **Bootstrap aggregation**: Train multiple models with different initializations
+- **Monte Carlo Dropout**: Use dropout during inference for uncertainty estimation
+- **Residual-based**: Default method using CV residuals
+
+### 5.5 Interpretation Guidelines
+
+#### Interval Width
+
+**Narrow intervals (e.g., 50-80%):**
+- ✅ High confidence in predictions
+- ✅ Good for stable, predictable series
+- ⚠️ May miss extreme events
+- **Use for**: Short-term operational planning
+
+**Wide intervals (e.g., 95-99%):**
+- ✅ Conservative estimates
+- ✅ Capture most plausible scenarios
+- ⚠️ May be too cautious for decision-making
+- **Use for**: Risk management, long-term planning
+
+#### Coverage Rate
+
+**Ideal Coverage:**
+- 95% CI should contain ~95% of actual values in holdout test
+- If coverage < target: Intervals too narrow (underestimating uncertainty)
+- If coverage > target: Intervals too wide (overestimating uncertainty)
+
+**Validation:**
+```python
+# Check if actual values fall within intervals
+coverage = ((y_test >= lower_bound) & (y_test <= upper_bound)).mean()
+print(f"Actual coverage: {coverage*100:.1f}%")
+print(f"Target coverage: {confidence_level}%")
+```
+
+### 5.6 Usage Examples
+
+#### Example 1: Standard 95% Intervals
+
+```python
+from autotsforecast import AutoForecaster
+
+auto = AutoForecaster(candidate_models=candidates)
+auto.fit(y_train, X_train)
+
+# Get forecasts with 95% confidence intervals
+results = auto.forecast(X_test, return_ci=True, confidence_level=95)
+forecasts = results['forecast']
+lower_95 = results['lower_bound']
+upper_95 = results['upper_bound']
+
+print(f"Forecast: {forecasts.iloc[0, 0]:.2f}")
+print(f"95% CI: [{lower_95.iloc[0, 0]:.2f}, {upper_95.iloc[0, 0]:.2f}]")
+```
+
+#### Example 2: Multiple Confidence Levels
+
+```python
+# Conservative (99%) vs Standard (95%) vs Aggressive (80%)
+levels = [80, 95, 99]
+
+for level in levels:
+    results = auto.forecast(X_test, return_ci=True, confidence_level=level)
+    width = (results['upper_bound'] - results['lower_bound']).mean().mean()
+    print(f"{level}% CI average width: {width:.2f}")
+```
+
+#### Example 3: Visualization
+
+```python
+import matplotlib.pyplot as plt
+
+# Get 95% intervals
+results = auto.forecast(X_test, return_ci=True, confidence_level=95)
+
+fig, ax = plt.subplots(figsize=(12, 6))
+
+# Plot historical data
+ax.plot(y_train.index, y_train['sales'], label='Historical', color='blue')
+
+# Plot forecast with confidence interval
+ax.plot(y_test.index, results['forecast']['sales'], 
+        label='Forecast', color='red', linewidth=2)
+ax.fill_between(y_test.index,
+                results['lower_bound']['sales'],
+                results['upper_bound']['sales'],
+                alpha=0.3, color='red', label='95% CI')
+
+# Plot actuals
+ax.plot(y_test.index, y_test['sales'], 
+        label='Actual', color='black', marker='o')
+
+ax.legend()
+ax.set_title('Forecast with 95% Confidence Intervals')
+plt.show()
+```
+
+### 5.7 Best Practices
+
+1. **Choose appropriate confidence level:**
+   - 80-90%: Operational planning
+   - 95%: Standard reporting
+   - 99%: Risk management
+
+2. **Validate coverage rate:**
+   - Check if actual values fall within intervals
+   - Adjust if systematic over/under-coverage
+
+3. **Consider horizon:**
+   - Longer horizons → wider intervals (more uncertainty)
+   - Short-term → narrower intervals
+
+4. **Communicate uncertainty:**
+   - Always report intervals alongside point forecasts
+   - Visualize uncertainty bands
+   - Explain what confidence level means
+
+5. **Model selection impact:**
+   - Better models → narrower intervals
+   - High-variance models → wider intervals
+   - Use AutoForecaster to find best model first
+
+### 5.8 Limitations
+
+1. **Assumes normal distribution**: Intervals assume residuals are normally distributed
+2. **Independent errors**: Assumes errors are independent (may not hold for correlated series)
+3. **Constant variance**: Assumes variance doesn't change over time (homoscedasticity)
+4. **Historical patterns**: Based on past residuals; may not capture regime changes
+
+**Alternative Approaches:**
+- **Quantile Regression**: Model different quantiles directly
+- **Conformal Prediction**: Distribution-free intervals with coverage guarantees
+- **Bayesian Methods**: Full posterior distribution of forecasts
+
+---
+
 ## 6. References
 
 ### Academic Papers

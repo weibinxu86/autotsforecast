@@ -70,6 +70,15 @@ class TestDriverAnalyzer:
         
         assert sensitivity.shape[0] == X.shape[1]
         assert all(sensitivity.values >= 0)  # Sensitivity should be non-negative
+        
+        # Binary feature (promotion) should have non-zero sensitivity
+        # since DGP has promotion with coefficient 30
+        assert sensitivity.loc['promotion', 'sales'] > 0
+        
+        # Price should have highest absolute sensitivity since it affects all values
+        # Temperature should be moderate
+        assert sensitivity.loc['price', 'sales'] > 0
+        assert sensitivity.loc['temperature', 'sales'] > 0
     
     def test_comprehensive_analysis(self, sample_data_with_covariates):
         """Test comprehensive driver analysis"""
