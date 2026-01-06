@@ -265,7 +265,7 @@ class HierarchicalReconciler:
         
         max_error = np.max(np.abs(reconciled - expected))
         
-        return max_error < tolerance
+        return bool(max_error < tolerance)
     
     def get_reconciliation_info(self) -> Dict:
         """Get information about the reconciliation

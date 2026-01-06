@@ -254,7 +254,12 @@ class DriverAnalyzer:
         self.feature_importance = df
         return df
     
-    def _sensitivity_analysis(self, X: pd.DataFrame, perturbation: float = 0.1) -> pd.DataFrame:
+    def _sensitivity_analysis(
+        self,
+        X: pd.DataFrame,
+        features: Optional[List[str]] = None,
+        perturbation: float = 0.1,
+    ) -> pd.DataFrame:
         """Perform sensitivity analysis by perturbing each feature
         
         For numerical features: scales by (1 + perturbation)
@@ -267,10 +272,18 @@ class DriverAnalyzer:
         if not self.model.is_fitted:
             raise ValueError("Model must be fitted first")
         
+        if features is None:
+            features = list(X.columns)
+
         baseline_pred = self.model.predict(X)
         sensitivity_dict = {target: [] for target in baseline_pred.columns}
         
-        for feature in X.columns:
+        for feature in features:
+            if feature not in X.columns:
+                for target in sensitivity_dict:
+                    sensitivity_dict[target].append(0)
+                continue
+
             X_perturbed = X.copy()
             
             # Check if feature is categorical (non-numeric)
@@ -297,7 +310,7 @@ class DriverAnalyzer:
                 abs_change = np.abs(perturbed_pred[target].values - baseline_pred[target].values)
                 sensitivity_dict[target].append(np.mean(abs_change))
         
-        df = pd.DataFrame(sensitivity_dict, index=X.columns)
+        df = pd.DataFrame(sensitivity_dict, index=features)
         self.sensitivity_results = df
         return df
     
@@ -328,12 +341,12 @@ class DriverAnalyzer:
         
         # Calculate importance for numerical features
         if numerical_features:
-            X_numerical = X[numerical_features]
-            
             if isinstance(self.model, LinearForecaster):
                 results['coefficient_importance'] = self._coefficients_importance()
-            
-            results['sensitivity'] = self._sensitivity_analysis(X_numerical)
+
+            # Sensitivity needs the full feature matrix to preserve the feature set
+            # used during model training (e.g., categorical/binary covariates).
+            results['sensitivity'] = self._sensitivity_analysis(X, features=numerical_features)
         
         # Analyze categorical features
         if categorical_features:
@@ -699,3 +712,7 @@ class DriverAnalyzer:
         df = pd.DataFrame(importance_dict, index=feature_names)
         
         return df
+
+
+# Backwards-compatible alias
+DriversAnalyzer = DriverAnalyzer

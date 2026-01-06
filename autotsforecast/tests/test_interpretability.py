@@ -1,35 +1,42 @@
 import unittest
+
+import numpy as np
+import pandas as pd
+
 from autotsforecast.interpretability.drivers import DriversAnalyzer
+from autotsforecast.models.base import LinearForecaster
+
 
 class TestDriversAnalyzer(unittest.TestCase):
-
     def setUp(self):
-        self.analyzer = DriversAnalyzer()
+        rng = np.random.default_rng(0)
+        n = 50
 
-    def test_analyze_drivers(self):
-        # Sample data for testing
-        covariates = {
-            'temperature': [30, 32, 31, 29, 28],
-            'humidity': [70, 65, 68, 72, 75]
-        }
-        predictions = [100, 110, 105, 95, 90]
-        
-        # Test the analyze_drivers method
-        results = self.analyzer.analyze_drivers(covariates, predictions)
-        self.assertIsNotNone(results)
-        self.assertIn('importance', results)
+        self.X = pd.DataFrame(
+            {
+                "price": rng.normal(loc=10, scale=1, size=n),
+                "promotion": rng.integers(0, 2, size=n),
+                "temperature": rng.normal(loc=20, scale=3, size=n),
+            }
+        )
+        self.y = pd.DataFrame({"sales": 100 + 2 * self.X["price"] + 5 * self.X["promotion"]})
 
-    def test_plot_driver_importance(self):
-        covariates = {
-            'temperature': [30, 32, 31, 29, 28],
-            'humidity': [70, 65, 68, 72, 75]
-        }
-        predictions = [100, 110, 105, 95, 90]
-        
-        # Test the plot_driver_importance method
-        self.analyzer.analyze_drivers(covariates, predictions)  # Ensure analysis is done first
-        plot = self.analyzer.plot_driver_importance()
-        self.assertIsNotNone(plot)
+        model = LinearForecaster(horizon=1)
+        model.fit(self.y, self.X)
+        self.analyzer = DriversAnalyzer(model)
 
-if __name__ == '__main__':
+    def test_analyze_drivers_returns_sensitivity(self):
+        results = self.analyzer.analyze_drivers(
+            self.X,
+            self.y,
+            numerical_features=["price", "temperature"],
+            categorical_features=["promotion"],
+        )
+
+        self.assertIn("sensitivity", results)
+        self.assertIsInstance(results["sensitivity"], pd.DataFrame)
+        self.assertIn("sales", results["sensitivity"].columns)
+
+
+if __name__ == "__main__":
     unittest.main()

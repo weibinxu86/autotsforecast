@@ -18,12 +18,12 @@ class BacktestValidator:
     Optionally, you can reserve a holdout period at the end for final evaluation.
     """
     
-    def __init__(self, model: BaseForecaster, n_splits: int = 5, 
+    def __init__(self, model: Optional[BaseForecaster] = None, n_splits: int = 5, 
                  test_size: int = 10, window_type: str = 'expanding',
                  holdout_period: Optional[int] = None):
         """
         Args:
-            model: Forecaster instance to validate
+            model: Forecaster instance to validate. Required for run()/run_with_holdout().
             n_splits: Number of train/test splits for CV
             test_size: Size of each validation fold
             window_type: 'expanding' (growing train set) or 'rolling' (fixed train size)
@@ -41,6 +41,20 @@ class BacktestValidator:
         self.actuals_list = []
         self.holdout_metrics_ = None
         self.holdout_predictions_ = None
+
+    def validate_results(self, results: Dict) -> bool:
+        """Validate a simple metrics dict.
+
+        This is a lightweight helper for quick sanity checks and backwards compatibility.
+        It does not depend on an initialized model.
+        """
+        try:
+            mse = float(results.get('mse'))
+            mae = float(results.get('mae'))
+        except (TypeError, ValueError):
+            return False
+
+        return mse >= 0 and mae >= 0
         
     def run(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> Dict[str, float]:
         """Run cross-validation on the provided data (excluding holdout if specified)
@@ -58,6 +72,9 @@ class BacktestValidator:
             on the holdout period.
         """
         
+        if self.model is None:
+            raise ValueError("BacktestValidator requires a model for run().")
+
         # Determine the effective data length for CV
         effective_len = len(y) - (self.holdout_period or 0)
         
@@ -180,6 +197,9 @@ class BacktestValidator:
                 "holdout_period must be specified in __init__ to use run_with_holdout(). "
                 "Either set holdout_period when creating BacktestValidator, or use run() for CV only."
             )
+
+        if self.model is None:
+            raise ValueError("BacktestValidator requires a model for run_with_holdout().")
         
         if len(y) < self.holdout_period:
             raise ValueError(f"Data length {len(y)} is less than holdout_period {self.holdout_period}")
@@ -254,6 +274,14 @@ class BacktestValidator:
         # SMAPE (Symmetric Mean Absolute Percentage Error)
         smape = np.mean(2.0 * np.abs(y_true - y_pred) / (np.abs(y_true) + np.abs(y_pred) + epsilon)) * 100
         metrics['smape'] = float(smape.mean() if isinstance(smape, pd.Series) else smape)
+
+        # R2 (Coefficient of determination), averaged across series
+        y_true_vals = y_true.values
+        y_pred_vals = y_pred.values
+        ss_res = np.sum((y_true_vals - y_pred_vals) ** 2, axis=0)
+        ss_tot = np.sum((y_true_vals - np.mean(y_true_vals, axis=0)) ** 2, axis=0)
+        r2_per_series = 1.0 - (ss_res / (ss_tot + epsilon))
+        metrics['r2'] = float(np.mean(r2_per_series))
         
         return metrics
     

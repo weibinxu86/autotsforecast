@@ -62,10 +62,32 @@ AutoTSForecast is a comprehensive Python package for multivariate time series fo
 
 ## Installation
 
-### Via PyPI (Coming Soon)
+### Via PyPI
 
 ```bash
 pip install autotsforecast
+```
+
+### Optional extras
+
+```bash
+# Visualizations
+pip install "autotsforecast[viz]"
+
+# Interpretability (SHAP)
+pip install "autotsforecast[interpret]"
+
+# XGBoost model
+pip install "autotsforecast[ml]"
+
+# Prophet model
+pip install "autotsforecast[prophet]"
+
+# Neural models (LSTM)
+pip install "autotsforecast[neural]"
+
+# Everything (recommended for maximum convenience)
+pip install "autotsforecast[all]"
 ```
 
 ### Development Installation
@@ -153,7 +175,7 @@ forecasts = model.predict(X_test=covariates_future)
 # No manual preprocessing needed!
 ```
 
-### 3. Hierarchical Reconciliation
+### 4. Hierarchical Reconciliation
 
 ```python
 from autotsforecast.hierarchical import HierarchicalReconciler
@@ -166,7 +188,7 @@ reconciler = HierarchicalReconciler(hierarchy=hierarchy)
 reconciled = reconciler.reconcile(forecasts, method='mint_shrink')
 ```
 
-### 4. Standalone Backtesting (Independent Feature)
+### 5. Standalone Backtesting (Independent Feature)
 
 ```python
 from autotsforecast.backtesting import BacktestValidator
@@ -203,7 +225,7 @@ validator.plot_results()
 actuals, predictions = validator.get_predictions()
 ```
 
-### 5. Covariate Interpretability (SHAP)
+### 6. Covariate Interpretability (SHAP)
 
 ```python
 from autotsforecast.interpretability import DriverAnalyzer
@@ -307,6 +329,22 @@ forecasts = model.predict(X_test)  # Same encoding applied to test data
 | `ETSForecaster` | Error-Trend-Seasonality (Exponential Smoothing) | Data with trends and seasonality |
 | `LSTMForecaster` | Long Short-Term Memory neural network | Complex temporal patterns and sequences |
 
+## Covariate Support by Model
+
+Not every model uses external covariates `X`. The table below summarizes whether a model **accepts and uses** covariates during `fit()`/`predict()`.
+
+| Model | Supports covariates `X`? | Notes | Install |
+|------|---------------------------|-------|---------|
+| `VARForecaster` | No | Uses only past values of all series | Core |
+| `MovingAverageForecaster` | No | Baseline using recent averages | Core |
+| `ARIMAForecaster` | No | Pure ARIMA (not ARIMAX); ignores `X` | Core |
+| `ETSForecaster` | No | Exponential smoothing; ignores `X` | Core |
+| `LSTMForecaster` | No | Uses only lagged values of `y` (no `X` in current implementation) | `autotsforecast[neural]` |
+| `LinearForecaster` | Yes (required) | Requires `X` for both fit and predict | Core |
+| `RandomForestForecaster` | Yes (optional) | Uses lags + optional `X` (categoricals auto-encoded) | Core |
+| `XGBoostForecaster` | Yes (optional) | Uses lags + optional `X` (categoricals auto-encoded) | `autotsforecast[ml]` |
+| `ProphetForecaster` | Yes (optional) | Uses Prophet regressors when `X` is provided and aligned | `autotsforecast[prophet]` |
+
 ## Documentation
 
 - 📘 **[Parameter Guide](PARAMETER_GUIDE.md)**: Quick navigation to find any parameter you need
@@ -316,36 +354,6 @@ forecasts = model.predict(X_test)  # Same encoding applied to test data
 - 📄 **[Installation Guide](INSTALL.md)**: Detailed setup instructions
 - 📋 **[Changelog](CHANGELOG.md)**: Version history
 - 🔧 **[Technical Documentation](TECHNICAL_DOCUMENTATION.md)**: Architecture and design details
-- 📦 **[Publishing Guide](PUBLISHING.md)**: For maintainers (PyPI distribution)
-
-## Publishing to PyPI
-
-For maintainers, the package is ready for PyPI distribution:
-
-```bash
-# Install build tools
-pip install build twine
-
-# Build distribution
-python -m build
-
-# Test on TestPyPI
-python -m twine upload --repository testpypi dist/*
-
-# Publish to PyPI
-python -m twine upload dist/*
-```
-
-After publishing, users can install via:
-
-```bash
-pip install autotsforecast              # Basic
-pip install autotsforecast[all]         # All features
-pip install autotsforecast[viz]         # Visualization only
-pip install autotsforecast[interpret]   # SHAP only
-```
-
-See [PUBLISHING.md](PUBLISHING.md) for complete instructions.
 
 ## Requirements
 
@@ -357,6 +365,8 @@ See [PUBLISHING.md](PUBLISHING.md) for complete instructions.
 - matplotlib, seaborn (visualization)
 - shap (interpretability)
 - xgboost (XGBoost model)
+- prophet (Prophet model)
+- torch (LSTM model)
 
 ## Contributing
 

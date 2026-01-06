@@ -1,5 +1,5 @@
 """Interpretability and driver analysis module"""
 
-from autotsforecast.interpretability.drivers import DriverAnalyzer
+from autotsforecast.interpretability.drivers import DriverAnalyzer, DriversAnalyzer
 
-__all__ = ["DriverAnalyzer"]
+__all__ = ["DriverAnalyzer", "DriversAnalyzer"]

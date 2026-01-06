@@ -2,12 +2,23 @@
 include README.md
 include LICENSE
 include CHANGELOG.md
-include requirements.txt
-include requirements-optional.txt
-include requirements-dev.txt
+include INSTALL.md
+include QUICKSTART.md
+include API_REFERENCE.md
+include PARAMETER_GUIDE.md
+include TECHNICAL_DOCUMENTATION.md
+
 recursive-include src *.py
-recursive-include examples *.ipynb *.py
-recursive-include tests *.py
+
+prune tests
+prune examples
+prune .pytest_cache
+prune build
+prune dist
+
+global-exclude *.egg-info
+
 global-exclude __pycache__
 global-exclude *.py[co]
+global-exclude *.backup
 global-exclude .DS_Store

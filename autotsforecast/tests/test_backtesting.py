@@ -1,30 +1,32 @@
 import unittest
+
+import numpy as np
+import pandas as pd
+
 from autotsforecast.backtesting.validator import BacktestValidator
+from autotsforecast.models.base import VARForecaster
+
 
 class TestBacktestValidator(unittest.TestCase):
-
     def setUp(self):
-        self.validator = BacktestValidator()
+        rng = np.random.default_rng(0)
+        index = pd.date_range("2020-01-01", periods=80, freq="D")
+        self.y = pd.DataFrame(
+            {
+                "sales_A": rng.normal(loc=100, scale=2, size=len(index)).cumsum(),
+                "sales_B": rng.normal(loc=150, scale=3, size=len(index)).cumsum(),
+            },
+            index=index,
+        )
+        model = VARForecaster(horizon=1, lags=1)
+        self.validator = BacktestValidator(model, n_splits=3, test_size=10, window_type="expanding")
 
-    def test_validate_results(self):
-        # Example test case for validating backtest results
-        results = {
-            'model': 'test_model',
-            'mse': 0.1,
-            'mae': 0.05
-        }
-        is_valid = self.validator.validate_results(results)
-        self.assertTrue(is_valid)
+    def test_run_returns_metrics(self):
+        metrics = self.validator.run(self.y)
 
-    def test_invalid_results(self):
-        # Example test case for invalid backtest results
-        results = {
-            'model': 'test_model',
-            'mse': -0.1,  # Invalid MSE
-            'mae': 0.05
-        }
-        is_valid = self.validator.validate_results(results)
-        self.assertFalse(is_valid)
+        for key in ["rmse", "mae", "mape", "smape", "r2"]:
+            self.assertIn(key, metrics)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

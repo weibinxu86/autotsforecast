@@ -11,29 +11,39 @@ All models automatically handle both categorical and numerical covariates.
 import pandas as pd
 import numpy as np
 from typing import Optional, Union, List
+from functools import lru_cache
 from .base import BaseForecaster
 from ..utils.preprocessing import CovariatePreprocessor
 
-try:
+
+@lru_cache(maxsize=1)
+def _import_sklearn():
     from sklearn.ensemble import RandomForestRegressor
     from sklearn.multioutput import MultiOutputRegressor
-    SKLEARN_AVAILABLE = True
-except ImportError:
-    SKLEARN_AVAILABLE = False
 
-try:
+    return RandomForestRegressor, MultiOutputRegressor
+
+
+@lru_cache(maxsize=1)
+def _import_xgboost():
     import xgboost as xgb
-    XGBOOST_AVAILABLE = True
-except ImportError:
-    XGBOOST_AVAILABLE = False
 
-try:
+    return xgb
+
+
+@lru_cache(maxsize=1)
+def _import_prophet():
     from prophet import Prophet
-    PROPHET_AVAILABLE = True
-except ImportError:
-    PROPHET_AVAILABLE = False
 
- 
+    return Prophet
+
+
+@lru_cache(maxsize=1)
+def _import_torch():
+    import torch
+    import torch.nn as nn
+
+    return torch, nn
 
 
 class RandomForestForecaster(BaseForecaster):
@@ -64,6 +74,8 @@ class RandomForestForecaster(BaseForecaster):
     **rf_params : dict
         Additional parameters for RandomForestRegressor
     """
+
+    supports_covariates: bool = True
     
     def __init__(
         self,
@@ -75,10 +87,16 @@ class RandomForestForecaster(BaseForecaster):
         preprocess_covariates: bool = True,
         **rf_params
     ):
-        if not SKLEARN_AVAILABLE:
-            raise ImportError("sklearn is required for RandomForestForecaster. Install with: pip install scikit-learn")
+        try:
+            RandomForestRegressor, MultiOutputRegressor = _import_sklearn()
+        except ImportError as exc:
+            raise ImportError(
+                "sklearn is required for RandomForestForecaster. Install with: pip install scikit-learn"
+            ) from exc
         
         super().__init__(horizon)
+        self._RandomForestRegressor = RandomForestRegressor
+        self._MultiOutputRegressor = MultiOutputRegressor
         self.n_lags = n_lags
         self.n_estimators = n_estimators
         self.max_depth = max_depth
@@ -134,13 +152,13 @@ class RandomForestForecaster(BaseForecaster):
             X_train_h = X_train_h.loc[train_index]
             y_train_h = y_shifted.loc[train_index]
 
-            rf = RandomForestRegressor(
+            rf = self._RandomForestRegressor(
                 n_estimators=self.n_estimators,
                 max_depth=self.max_depth,
                 random_state=self.random_state,
                 **self.rf_params
             )
-            model = MultiOutputRegressor(rf)
+            model = self._MultiOutputRegressor(rf)
             model.fit(X_train_h, y_train_h)
             self.models.append(model)
         
@@ -255,6 +273,8 @@ class XGBoostForecaster(BaseForecaster):
     **xgb_params : dict
         Additional XGBoost parameters
     """
+
+    supports_covariates: bool = True
     
     def __init__(
         self,
@@ -267,10 +287,13 @@ class XGBoostForecaster(BaseForecaster):
         preprocess_covariates: bool = True,
         **xgb_params
     ):
-        if not XGBOOST_AVAILABLE:
-            raise ImportError("xgboost is required for XGBoostForecaster. Install with: pip install xgboost")
+        try:
+            xgb = _import_xgboost()
+        except ImportError as exc:
+            raise ImportError("xgboost is required for XGBoostForecaster. Install with: pip install xgboost") from exc
         
         super().__init__(horizon)
+        self._xgb = xgb
         self.n_lags = n_lags
         self.n_estimators = n_estimators
         self.max_depth = max_depth
@@ -328,7 +351,7 @@ class XGBoostForecaster(BaseForecaster):
 
             models_h = []
             for target_col in y.columns:
-                model = xgb.XGBRegressor(
+                model = self._xgb.XGBRegressor(
                     n_estimators=self.n_estimators,
                     max_depth=self.max_depth,
                     learning_rate=self.learning_rate,
@@ -442,6 +465,8 @@ class ProphetForecaster(BaseForecaster):
     **prophet_params : dict
         Additional Prophet parameters
     """
+
+    supports_covariates: bool = True
     
     def __init__(
         self,
@@ -453,10 +478,13 @@ class ProphetForecaster(BaseForecaster):
         daily_seasonality: Union[bool, int] = 'auto',
         **prophet_params
     ):
-        if not PROPHET_AVAILABLE:
-            raise ImportError("prophet is required for ProphetForecaster. Install with: pip install prophet")
+        try:
+            Prophet = _import_prophet()
+        except ImportError as exc:
+            raise ImportError("prophet is required for ProphetForecaster. Install with: pip install prophet") from exc
         
         super().__init__(horizon)
+        self._Prophet = Prophet
         self.growth = growth
         self.seasonality_mode = seasonality_mode
         self.yearly_seasonality = yearly_seasonality
@@ -502,7 +530,7 @@ class ProphetForecaster(BaseForecaster):
                     df_prophet[x_col] = X[x_col].values
             
             # Create and fit model
-            model = Prophet(
+            model = self._Prophet(
                 growth=self.growth,
                 seasonality_mode=self.seasonality_mode,
                 yearly_seasonality=self.yearly_seasonality,
@@ -586,12 +614,7 @@ try:
 except ImportError:
     ETS_AVAILABLE = False
 
-try:
-    import torch
-    import torch.nn as nn
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
+TORCH_AVAILABLE = None
 
 
 class ARIMAForecaster(BaseForecaster):
@@ -601,10 +624,7 @@ class ARIMAForecaster(BaseForecaster):
     
     Note: This implementation does NOT use exogenous variables (ARIMAX).
     For pure time-series forecasting without external covariates.
-    Use LinearForecaster, RandomForest, or XGBoost if you need covariate support.
-    Note: This implementation does NOT use exogenous variables (ARIMAX).
-    For pure time-series forecasting without external covariates.
-    Use LinearForecaster, RandomForest, or XGBoost if you need covariate support.
+    Use LinearForecaster, RandomForest, XGBoost, or Prophet if you need covariate support.
     
     Parameters
     ----------
@@ -831,10 +851,14 @@ class LSTMForecaster(BaseForecaster):
         learning_rate: float = 0.001,
         random_state: int = 42
     ):
-        if not TORCH_AVAILABLE:
-            raise ImportError("pytorch is required for LSTMForecaster. Install with: pip install torch")
+        try:
+            torch, nn = _import_torch()
+        except ImportError as exc:
+            raise ImportError("pytorch is required for LSTMForecaster. Install with: pip install torch") from exc
         
         super().__init__(horizon)
+        self._torch = torch
+        self._nn = nn
         self.n_lags = n_lags
         self.hidden_size = hidden_size
         self.num_layers = num_layers
