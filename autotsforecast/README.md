@@ -7,15 +7,25 @@
 
 AutoTSForecast automatically finds the best forecasting model for each of your time series. No more guessing whether Prophet, ARIMA, or XGBoost works best — let the algorithm decide.
 
+**📚 Full Documentation & Examples:** [https://github.com/weibinxu86/autotsforecast](https://github.com/weibinxu86/autotsforecast)
+
 ## Installation
 
-### Basic Install (Core Models)
+### 🚀 Recommended: Install Everything
+
+```bash
+pip install "autotsforecast[all]"
+```
+
+This installs **all 9 models** plus visualization and interpretability tools.
+
+### Basic Install (Core Models Only)
 
 ```bash
 pip install autotsforecast
 ```
 
-This gives you these models **out of the box**:
+This gives you 6 models **out of the box**:
 | Model | Description |
 |-------|-------------|
 | `ARIMAForecaster` | Classical ARIMA |
@@ -25,7 +35,7 @@ This gives you these models **out of the box**:
 | `RandomForestForecaster` | ML with covariates ✓ |
 | `VARForecaster` | Vector autoregression |
 
-### Install with Optional Models
+### Install Specific Optional Models
 
 Some models require additional dependencies:
 
@@ -42,8 +52,8 @@ pip install "autotsforecast[neural]"
 # Add SHAP (interpretability)
 pip install "autotsforecast[interpret]"
 
-# Install EVERYTHING (recommended for full functionality)
-pip install "autotsforecast[all]"
+# Add visualization tools
+pip install "autotsforecast[viz]"
 ```
 
 ### Model Availability Summary
@@ -133,19 +143,17 @@ analyzer = DriverAnalyzer(model=fitted_model, feature_names=['temperature', 'pro
 importance = analyzer.calculate_feature_importance(X_test, y_test, method='sensitivity')
 ```
 
-## Full Tutorial
+## Documentation
 
-See **[examples/autotsforecast_tutorial.ipynb](examples/autotsforecast_tutorial.ipynb)** for a complete walkthrough covering:
+For complete documentation, examples, and API reference, visit:
 
-1. **AutoForecaster vs Individual Models** — Proof that per-series selection wins
-2. **Hierarchical Reconciliation** — Coherent forecasts with regional improvements
-3. **Interpretability** — Understand which features drive predictions
+**[https://github.com/weibinxu86/autotsforecast](https://github.com/weibinxu86/autotsforecast)**
 
-## API Reference
-
-See **[API_REFERENCE.md](API_REFERENCE.md)** for complete parameter documentation.
-
-See **[PARAMETER_GUIDE.md](PARAMETER_GUIDE.md)** for quick parameter lookup.
+Includes:
+- Full tutorial notebook with examples
+- Complete API reference
+- Parameter guide
+- Advanced features (hierarchical reconciliation, interpretability, backtesting)
 
 ## Requirements
 
@@ -154,13 +162,11 @@ See **[PARAMETER_GUIDE.md](PARAMETER_GUIDE.md)** for quick parameter lookup.
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT License
 
 ## Contributing
 
-Contributions welcome! Please fork the repo and submit a pull request.
-
-## Citation
+Contributions welcome! Visit the GitHub repository to get started.
 
 ```bibtex
 @software{autotsforecast2025,

@@ -38,36 +38,10 @@ fit(y: pd.DataFrame, X: Optional[pd.DataFrame] = None)
 - `X`: Optional covariates (same index as y)
 
 ```python
-forecast(X: Optional[pd.DataFrame] = None, 
-         return_ci: bool = False,
-         confidence_level: float = 95) -> Union[pd.DataFrame, dict]
+forecast(X: Optional[pd.DataFrame] = None) -> pd.DataFrame
 ```
-- `X`: Future covariates for forecast period
-- `return_ci`: If True, returns confidence intervals in addition to point forecasts
-- `confidence_level`: Confidence level for prediction intervals (e.g., 50, 80, 95, 99)
-- Returns: 
-  - If `return_ci=False`: pd.DataFrame with point forecasts
-  - If `return_ci=True`: dict with keys:
-    - `'forecast'`: Point forecasts (pd.DataFrame)
-    - `'lower_bound'`: Lower confidence bounds (pd.DataFrame)
-    - `'upper_bound'`: Upper confidence bounds (pd.DataFrame)
-
-**Confidence Intervals Example:**
-```python
-# Get forecasts with 95% confidence intervals
-results = auto.forecast(X_test, return_ci=True, confidence_level=95)
-forecasts = results['forecast']
-lower_95 = results['lower_bound']  # 95% lower bound
-upper_95 = results['upper_bound']  # 95% upper bound
-
-# Get forecasts with 80% confidence intervals (narrower)
-results_80 = auto.forecast(X_test, return_ci=True, confidence_level=80)
-
-# Get forecasts with 99% confidence intervals (wider)
-results_99 = auto.forecast(X_test, return_ci=True, confidence_level=99)
-```
-
-**Note**: Wider intervals (e.g., 99%) indicate more uncertainty, narrower intervals (e.g., 50%) indicate higher confidence but capture fewer actual values.
+- `X`: Future covariates for forecast period (required if model was trained with covariates)
+- Returns: pd.DataFrame with point forecasts
 
 ---
 
