@@ -166,11 +166,31 @@ class AutoForecaster:
         try:
             return copy.deepcopy(model)
         except Exception as e:
-            raise TypeError(
-                f"Failed to clone model {model.__class__.__name__}. "
-                "Please pass fresh model instances or models that can be deep-copied. "
-                f"Original error: {e}"
-            )
+            # If deepcopy fails, try to create a new instance with same parameters
+            try:
+                # Get the model class
+                model_class = type(model)
+                # Try to get init parameters if available
+                if hasattr(model, 'get_params'):
+                    params = model.get_params()
+                    return model_class(**params)
+                else:
+                    # Fallback: try to recreate with common attributes
+                    init_params = {}
+                    for attr in ['horizon', 'lags', 'n_lags', 'window', 'n_estimators', 
+                                 'max_depth', 'learning_rate', 'random_state', 'order',
+                                 'seasonal_order', 'seasonal_periods', 'trend', 'seasonal',
+                                 'hidden_size', 'num_layers', 'dropout', 'epochs', 
+                                 'batch_size']:
+                        if hasattr(model, attr):
+                            init_params[attr] = getattr(model, attr)
+                    return model_class(**init_params)
+            except Exception as e2:
+                raise TypeError(
+                    f"Failed to clone model {model.__class__.__name__}. "
+                    "Please pass fresh model instances or models that can be deep-copied. "
+                    f"Original error: {e}. Fallback error: {e2}"
+                )
         
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'AutoForecaster':
         """

@@ -117,6 +117,14 @@ class VARForecaster(BaseForecaster):
         self.model = None
         self.fitted_model = None
         self.coefficients = None
+    
+    def get_params(self):
+        """Get parameters for cloning (excludes internal state)"""
+        return {
+            'horizon': self.horizon,
+            'lags': self.lags,
+            'trend': self.trend
+        }
         
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'VARForecaster':
         """Fit VAR model"""
@@ -149,6 +157,13 @@ class LinearForecaster(BaseForecaster):
         from sklearn.linear_model import LinearRegression
         self.models = {}
         self.target_names = None
+    
+    def get_params(self):
+        """Get parameters for cloning (excludes internal state)"""
+        return {
+            'horizon': self.horizon,
+            'fit_intercept': self.fit_intercept
+        }
         
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'LinearForecaster':
         """Fit linear models for each target and horizon"""
@@ -206,6 +221,13 @@ class MovingAverageForecaster(BaseForecaster):
         super().__init__(horizon)
         self.window = window
         self.last_values = None
+    
+    def get_params(self):
+        """Get parameters for cloning (excludes internal state)"""
+        return {
+            'horizon': self.horizon,
+            'window': self.window
+        }
         
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'MovingAverageForecaster':
         """Store last values for moving average"""

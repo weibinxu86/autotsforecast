@@ -107,6 +107,18 @@ class RandomForestForecaster(BaseForecaster):
         self.covariate_preprocessor_ = None
         self._trained_with_covariates = False
         self._covariate_columns_ = None
+    
+    def get_params(self):
+        """Get parameters for cloning (excludes internal state)"""
+        return {
+            'n_lags': self.n_lags,
+            'n_estimators': self.n_estimators,
+            'max_depth': self.max_depth,
+            'horizon': self.horizon,
+            'random_state': self.random_state,
+            'preprocess_covariates': self.preprocess_covariates,
+            **self.rf_params
+        }
         
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'RandomForestForecaster':
         """Fit Random Forest with lagged features and optional covariates.
@@ -305,6 +317,19 @@ class XGBoostForecaster(BaseForecaster):
         self.covariate_preprocessor_ = None
         self._trained_with_covariates = False
         self._covariate_columns_ = None
+    
+    def get_params(self):
+        """Get parameters for cloning (excludes internal state)"""
+        return {
+            'n_lags': self.n_lags,
+            'n_estimators': self.n_estimators,
+            'max_depth': self.max_depth,
+            'learning_rate': self.learning_rate,
+            'horizon': self.horizon,
+            'random_state': self.random_state,
+            'preprocess_covariates': self.preprocess_covariates,
+            **self.xgb_params
+        }
         
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'XGBoostForecaster':
         """Fit XGBoost with lagged features and optional covariates.
@@ -494,6 +519,18 @@ class ProphetForecaster(BaseForecaster):
         self.models = {}
         self.freq_ = None
         self.regressor_cols_ = []
+    
+    def get_params(self):
+        """Get parameters for cloning (excludes internal state)"""
+        return {
+            'horizon': self.horizon,
+            'growth': self.growth,
+            'seasonality_mode': self.seasonality_mode,
+            'yearly_seasonality': self.yearly_seasonality,
+            'weekly_seasonality': self.weekly_seasonality,
+            'daily_seasonality': self.daily_seasonality,
+            **self.prophet_params
+        }
         
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'ProphetForecaster':
         """Fit separate Prophet model for each series"""
@@ -658,6 +695,15 @@ class ARIMAForecaster(BaseForecaster):
         self.seasonal_order = seasonal_order
         self.arima_params = arima_params
         self.models = {}
+    
+    def get_params(self):
+        """Get parameters for cloning (excludes internal state)"""
+        return {
+            'order': self.order,
+            'seasonal_order': self.seasonal_order,
+            'horizon': self.horizon,
+            **self.arima_params
+        }
         
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'ARIMAForecaster':
         """Fit separate ARIMA model for each series (ignores X - pure time series)"""
@@ -758,6 +804,18 @@ class ETSForecaster(BaseForecaster):
         self.models = {}
         self.last_date = None
         self.freq_ = None
+    
+    def get_params(self):
+        """Get parameters for cloning (excludes internal state)"""
+        return {
+            'trend': self.trend,
+            'seasonal': self.seasonal,
+            'seasonal_periods': self.seasonal_periods,
+            'damped_trend': self.damped_trend,
+            'initialization_method': self.initialization_method,
+            'horizon': self.horizon,
+            **self.fit_params
+        }
 
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'ETSForecaster':
         """Fit separate ETS model for each series (X is ignored)."""
@@ -869,6 +927,20 @@ class LSTMForecaster(BaseForecaster):
         self.random_state = random_state
         self.model = None
         self.scaler = None
+    
+    def get_params(self):
+        """Get parameters for cloning (excludes internal state)"""
+        return {
+            'n_lags': self.n_lags,
+            'hidden_size': self.hidden_size,
+            'num_layers': self.num_layers,
+            'dropout': self.dropout,
+            'horizon': self.horizon,
+            'epochs': self.epochs,
+            'batch_size': self.batch_size,
+            'learning_rate': self.learning_rate,
+            'random_state': self.random_state
+        }
         
     def _create_sequences(self, data):
         """Create sequences for LSTM training"""
@@ -886,6 +958,9 @@ class LSTMForecaster(BaseForecaster):
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'LSTMForecaster':
         """Fit LSTM model"""
         from sklearn.preprocessing import StandardScaler
+        
+        torch = self._torch
+        nn = self._nn
         
         self.feature_names = y.columns.tolist()
         torch.manual_seed(self.random_state)
@@ -947,6 +1022,8 @@ class LSTMForecaster(BaseForecaster):
         """Generate forecasts using LSTM"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
+        
+        torch = self._torch
         
         self.model.eval()
         

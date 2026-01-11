@@ -1,399 +1,172 @@
 # AutoTSForecast
 
-**Automated Multivariate Time Series Forecasting with Model Selection, Hierarchical Reconciliation, and Covariate Interpretability (SHAP)**
+**Automated Time Series Forecasting with Per-Series Model Selection**
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Overview
-
-AutoTSForecast is a comprehensive Python package for multivariate time series forecasting that provides automatic model selection, hierarchical reconciliation, and interpretability tools.
-
-🤖 **Automatic Model Selection** • 📊 **9 Forecasting Algorithms** • 🎯 **Hierarchical Reconciliation** • 🔍 **Covariate Interpretability**
-
-> 💡 **Looking for parameter values?** See [Parameter Guide](PARAMETER_GUIDE.md) for quick navigation or [API Reference](API_REFERENCE.md) for complete documentation.
-
-## Key Features
-
-### Core Capabilities
-- ✅ **9 Forecasting Algorithms**: VAR, Linear, Moving Average, Random Forest, XGBoost, Prophet, ARIMA, ETS, LSTM
-- ✅ **AutoForecaster**: Automatically selects the best model per series using time-respecting cross-validation
-- ✅ **Per-Series Model Selection**: Each time series can have its own optimally-selected model
-- ✅ **Parallel Processing**: Fast model selection using all CPU cores (`n_jobs=-1`) via joblib
-- ✅ **Confidence Intervals**: User-configurable prediction intervals for uncertainty quantification (50%, 80%, 95%, 99%, etc.)
-- ✅ **Flexible Covariate Support**: Different covariates for different series, or mix with/without covariates
-- ✅ **Automatic Categorical Handling**: One-hot or label encoding for categorical features - no manual preprocessing needed
-- ✅ **Independent Backtesting**: Standalone time series cross-validation with expanding/rolling windows
-
-### Advanced Features
-- ✅ **Hierarchical Reconciliation**: Ensures forecasts are coherent (e.g., Total = Region A + Region B)
-  - Methods: Bottom-up, Top-down, MinTrace (OLS, shrinkage, covariance)
-  - Automatically enforces aggregation constraints
-  
-- ✅ **SHAP Interpretability**: Understand which external covariates drive predictions
-  - Model-agnostic design - works with any AutoForecaster-selected model
-  - Automatically filters out lag features, focuses on business drivers
-  - Visualizations: summary plots, feature importance rankings
-
-- ✅ **Standalone Backtesting Module**: Independent time series cross-validation
-  - Use with ANY forecasting model (not just AutoForecaster)
-  - Expanding or rolling window validation
-  - Comprehensive metrics: RMSE, MAE, MAPE, SMAPE, R²
-  - Automated fold-by-fold analysis with visualizations
-  - Get predictions and actuals for custom analysis
-  - Time-respecting splits (no data leakage)
-
-### Data Handling
-- ✅ **Automatic Covariate Preprocessing**: Handles categorical and numerical features
-  - Categorical: One-hot encoding (default) or label encoding
-  - Numerical: Optional scaling with StandardScaler
-  - Auto-detection: Automatically identifies feature types from data
-  - Missing values: Forward fill, backward fill, mean imputation, or drop
-- ✅ **Multivariate Forecasting**: Model multiple related time series simultaneously
-- ✅ **External Drivers**: Include promotions, weather, holidays, macroeconomic indicators
-
-### Performance Optimization
-- ✅ **Parallel Model Selection**: Uses joblib for multi-core processing
-  - Set `n_jobs=-1` to use all CPU cores
-  - Significantly speeds up AutoForecaster with multiple candidate models
-  - Works with both per-series and global model selection
-- ✅ **Efficient Feature Engineering**: Vectorized lag creation and covariate alignment
-- ✅ **Memory-Efficient**: Processes data in chunks where applicable
+AutoTSForecast automatically finds the best forecasting model for each of your time series. No more guessing whether Prophet, ARIMA, or XGBoost works best — let the algorithm decide.
 
 ## Installation
 
-### Via PyPI
+### Basic Install (Core Models)
 
 ```bash
 pip install autotsforecast
 ```
 
-### Optional extras
+This gives you these models **out of the box**:
+| Model | Description |
+|-------|-------------|
+| `ARIMAForecaster` | Classical ARIMA |
+| `ETSForecaster` | Exponential smoothing |
+| `LinearForecaster` | Linear regression with lags |
+| `MovingAverageForecaster` | Simple baseline |
+| `RandomForestForecaster` | ML with covariates ✓ |
+| `VARForecaster` | Vector autoregression |
+
+### Install with Optional Models
+
+Some models require additional dependencies:
 
 ```bash
-# Visualizations
-pip install "autotsforecast[viz]"
-
-# Interpretability (SHAP)
-pip install "autotsforecast[interpret]"
-
-# XGBoost model
+# Add XGBoost (gradient boosting with covariates)
 pip install "autotsforecast[ml]"
 
-# Prophet model
+# Add Prophet (Facebook's forecasting library)
 pip install "autotsforecast[prophet]"
 
-# Neural models (LSTM)
+# Add LSTM (deep learning)
 pip install "autotsforecast[neural]"
 
-# Everything (recommended for maximum convenience)
+# Add SHAP (interpretability)
+pip install "autotsforecast[interpret]"
+
+# Install EVERYTHING (recommended for full functionality)
 pip install "autotsforecast[all]"
 ```
 
-### Development Installation
+### Model Availability Summary
 
-```bash
-git clone https://github.com/weibinxu86/autotsforecast.git
-cd autotsforecast
-pip install -e .[all]
-```
+| Model | Basic Install | Extra Required |
+|-------|:-------------:|----------------|
+| ARIMA, ETS, Linear, MovingAverage, RandomForest, VAR | ✅ | — |
+| XGBoostForecaster | ❌ | `pip install "autotsforecast[ml]"` |
+| ProphetForecaster | ❌ | `pip install "autotsforecast[prophet]"` |
+| LSTMForecaster | ❌ | `pip install "autotsforecast[neural]"` |
+| SHAP Analysis | ❌ | `pip install "autotsforecast[interpret]"` |
 
 ## Quick Start
 
-### 1. Basic Forecasting
+### 1. AutoForecaster — Let the Algorithm Choose
 
 ```python
-import pandas as pd
-from autotsforecast import RandomForestForecaster
+from autotsforecast import AutoForecaster
+from autotsforecast.models.base import RandomForestForecaster, MovingAverageForecaster
+from autotsforecast.models.external import ARIMAForecaster, ProphetForecaster
 
-# Your multivariate time series data
-data = pd.DataFrame({
-    'sales_north': [...],
-    'sales_south': [...],
-    'sales_east': [...]
-})
+# Your time series data (pandas DataFrame)
+# y = pd.DataFrame({'series_a': [...], 'series_b': [...]})
 
-# Fit and forecast
-model = RandomForestForecaster(n_lags=7, horizon=30)
-model.fit(data)
-forecasts = model.predict()
-```
-
-### 2. Automatic Model Selection
-
-```python
-from autotsforecast import AutoForecaster, VARForecaster, RandomForestForecaster
-
-# Define candidates
+# Define candidate models
 candidates = [
-    VARForecaster(lags=3, horizon=30),
-    VARForecaster(lags=7, horizon=30),
-    RandomForestForecaster(n_lags=7, horizon=30),
-    # ... add more models
+    ARIMAForecaster(horizon=14),
+    ProphetForecaster(horizon=14),
+    RandomForestForecaster(horizon=14, n_lags=7),
+    MovingAverageForecaster(horizon=14, window=7),
 ]
 
-# AutoForecaster picks the best one using parallel processing
-auto = AutoForecaster(
-    candidate_models=candidates, 
-    metric='rmse',
-    n_jobs=-1  # Use all CPU cores for fast parallel selection
-)
-auto.fit(data)
-
-# Point forecasts
+# AutoForecaster picks the best model for EACH series
+auto = AutoForecaster(candidate_models=candidates, metric='rmse')
+auto.fit(y_train)
 forecasts = auto.forecast()
 
-# Or get forecasts with confidence intervals (uncertainty quantification)
-results = auto.forecast(return_ci=True, confidence_level=95)
-forecasts = results['forecast']       # Point forecasts
-lower_bounds = results['lower_bound']  # Lower confidence bounds
-upper_bounds = results['upper_bound']  # Upper confidence bounds
-
-print(f"Best model: {auto.best_model_name_}")
+# See which models were selected
+print(auto.best_model_name_)  # e.g., {'series_a': 'Prophet', 'series_b': 'ARIMA'}
 ```
 
-### 3. Using Covariates with Automatic Categorical Handling
+### 2. Using Covariates (External Features)
 
 ```python
-from autotsforecast import RandomForestForecaster
-import pandas as pd
+from autotsforecast.models.external import XGBoostForecaster
 
-# Your data with both numerical and categorical features
-covariates = pd.DataFrame({
-    'temperature': [20.5, 21.0, 19.8, ...],     # Numerical
-    'promotion': [0, 1, 1, 0, ...],              # Binary
-    'day_of_week': ['Mon', 'Tue', 'Wed', ...],   # Categorical
-    'region': ['North', 'South', 'East', ...]    # Categorical
-})
-
-# Model automatically detects and encodes categorical features
-model = RandomForestForecaster(n_lags=7, horizon=30, preprocess_covariates=True)
-model.fit(data, X=covariates)
-forecasts = model.predict(X_test=covariates_future)
-
-# Categorical features are automatically one-hot encoded
-# No manual preprocessing needed!
+# X contains external features (temperature, promotions, etc.)
+model = XGBoostForecaster(horizon=14, n_lags=7)
+model.fit(y_train, X=X_train)
+forecasts = model.predict(X=X_test)
 ```
 
-### 4. Hierarchical Reconciliation
+**Models supporting covariates:** Prophet, ARIMA, XGBoost, RandomForest, LSTM
+
+### 3. Hierarchical Reconciliation
+
+Ensure forecasts add up correctly (e.g., `total = region_a + region_b`):
 
 ```python
-from autotsforecast.hierarchical import HierarchicalReconciler
+from autotsforecast.hierarchical.reconciliation import HierarchicalReconciler
 
-# Define hierarchy
-hierarchy = {'Total': ['North', 'South', 'East']}
-
-# Ensure forecasts are coherent
-reconciler = HierarchicalReconciler(hierarchy=hierarchy)
-reconciled = reconciler.reconcile(forecasts, method='mint_shrink')
+hierarchy = {'total': ['region_a', 'region_b']}
+reconciler = HierarchicalReconciler(forecasts=base_forecasts, hierarchy=hierarchy)
+reconciler.reconcile(method='ols')
+coherent_forecasts = reconciler.reconciled_forecasts
 ```
 
-### 5. Standalone Backtesting (Independent Feature)
+### 4. Backtesting (Cross-Validation)
 
 ```python
-from autotsforecast.backtesting import BacktestValidator
-from autotsforecast import RandomForestForecaster
+from autotsforecast.backtesting.validator import BacktestValidator
 
-# Create any forecasting model
-model = RandomForestForecaster(horizon=14, n_lags=7)
+validator = BacktestValidator(model=my_model, n_splits=5, test_size=14)
+validator.run(y_train, X=X_train)
 
-# Backtest with expanding window CV
-validator = BacktestValidator(
-    model=model,
-    n_splits=5,           # 5 cross-validation folds
-    test_size=14,         # 14-day test windows
-    window_type='expanding'  # or 'rolling'
-)
-
-# Run backtesting
-metrics = validator.run(y_train, X_train)
-print(f"Average RMSE: {metrics['rmse']:.2f}")
-print(f"Average MAPE: {metrics['mape']:.2f}%")
-
-# Get detailed fold-by-fold results
-fold_results = validator.get_fold_results()
-print(fold_results)
-
-# Get summary statistics
-summary = validator.get_summary()
-print(summary)
-
-# Visualize results
-validator.plot_results()
-
-# Get all predictions and actuals for custom analysis
-actuals, predictions = validator.get_predictions()
+# Get results
+results = validator.get_fold_results()  # RMSE per fold
+print(f"Average RMSE: {results['rmse'].mean():.2f}")
 ```
 
-### 6. Covariate Interpretability (SHAP)
+### 5. Interpretability (Feature Importance)
 
 ```python
-from autotsforecast.interpretability import DriverAnalyzer
+from autotsforecast.interpretability.drivers import DriverAnalyzer
 
-# Analyze impact of external covariates on predictions
-interpreter = DriverAnalyzer(model)
-shap_values = interpreter.calculate_shap_values(X_covariates)  # X should contain only covariates
-importance = interpreter.get_shap_feature_importance(shap_values)
-
-# Note: SHAP analysis focuses on external covariates only (e.g., marketing, weather)
-# Lag features are excluded from interpretability analysis
+analyzer = DriverAnalyzer(model=fitted_model, feature_names=['temperature', 'promotion'])
+importance = analyzer.calculate_feature_importance(X_test, y_test, method='sensitivity')
 ```
 
-## Complete Tutorial
+## Full Tutorial
 
-See **[examples/autotsforecast_tutorial.ipynb](examples/autotsforecast_tutorial.ipynb)** for a comprehensive guide covering:
+See **[examples/autotsforecast_tutorial.ipynb](examples/autotsforecast_tutorial.ipynb)** for a complete walkthrough covering:
 
-1. Basic forecasting with multiple models
-2. AutoForecaster for automatic selection
-3. Using covariates to improve accuracy
-4. Hierarchical reconciliation
-5. Covariate interpretability with SHAP (external drivers only)
+1. **AutoForecaster vs Individual Models** — Proof that per-series selection wins
+2. **Hierarchical Reconciliation** — Coherent forecasts with regional improvements
+3. **Interpretability** — Understand which features drive predictions
 
-## How It Works
+## API Reference
 
-### Parallel Processing Architecture
+See **[API_REFERENCE.md](API_REFERENCE.md)** for complete parameter documentation.
 
-AutoForecaster achieves fast model selection through parallel processing:
-
-1. **Joblib Backend**: Uses `joblib.Parallel` to distribute work across CPU cores
-2. **Per-Series Parallelism**: When `per_series_models=True`, each time series is processed independently in parallel
-3. **Model Evaluation**: Within each series, candidate models are evaluated sequentially (CV folds can be parallelized)
-4. **Resource Management**: Set `n_jobs=-1` to use all available cores, or specify a number (e.g., `n_jobs=4`)
-
-**Performance Gains:**
-- With 3 time series and 9 candidate models: up to 3x speedup on multi-core systems
-- Larger datasets benefit more from parallelization
-- No code changes needed - just set `n_jobs=-1`
-
-### Categorical Feature Handling
-
-Models automatically process categorical features without manual encoding:
-
-1. **Auto-Detection**: Inspects data types and unique value counts
-   - String columns → categorical
-   - Numeric columns with few unique values (< max_categories) → categorical
-   - All others → numerical
-
-2. **Encoding Methods**:
-   - **One-Hot Encoding** (default): Creates binary columns for each category
-     - Example: `['Mon', 'Tue', 'Wed']` → `[Mon_1, Tue_1, Wed_1]`
-   - **Label Encoding**: Maps categories to integers (0, 1, 2, ...)
-     - Use `encoding='label'` for high-cardinality features
-
-3. **Preprocessing Pipeline**:
-   ```python
-   from autotsforecast.utils.preprocessing import CovariatePreprocessor
-   
-   # Customize preprocessing (optional - models do this automatically)
-   preprocessor = CovariatePreprocessor(
-       encoding='onehot',           # or 'label'
-       scale_numerical=False,       # Optional: standardize numerical features
-       handle_missing='forward_fill', # or 'backward_fill', 'mean', 'drop'
-       max_categories=50            # Threshold for categorical detection
-   )
-   X_processed = preprocessor.fit_transform(X)
-   ```
-
-4. **Integration with Models**:
-   - RandomForest and XGBoost: Set `preprocess_covariates=True` (default)
-   - Preprocessing happens automatically during `fit()`
-   - Transformations are saved and applied to test data during `predict()`
-
-**Example Workflow:**
-```python
-# Your raw data with mixed types
-X = pd.DataFrame({
-    'temp': [20, 21, 19],           # Numerical
-    'promo': [0, 1, 0],              # Binary (treated as categorical or numerical)
-    'day': ['Mon', 'Tue', 'Wed'],   # Categorical
-    'store': ['A', 'B', 'A']         # Categorical
-})
-
-# Model handles everything automatically
-model = RandomForestForecaster(n_lags=7, horizon=14)
-model.fit(y_train, X)  # Categorical features auto-encoded internally
-forecasts = model.predict(X_test)  # Same encoding applied to test data
-```
-
-## Available Models
-
-| Model | Description | Best For |
-|-------|-------------|----------|
-| `VARForecaster` | Vector AutoRegression | Capturing cross-variable dependencies |
-| `LinearForecaster` | Linear regression with lags | Simple linear patterns |
-| `MovingAverageForecaster` | Simple moving average | Stable baseline |
-| `RandomForestForecaster` | Ensemble with lags + covariates | Non-linear patterns with external factors |
-| `XGBoostForecaster` | Gradient boosting with lags | High-performance ML forecasting |
-| `ProphetForecaster` | Facebook Prophet | Robust forecasting with holidays and seasonality |
-| `ARIMAForecaster` | ARIMA/SARIMA | Classical statistical forecasting |
-| `ETSForecaster` | Error-Trend-Seasonality (Exponential Smoothing) | Data with trends and seasonality |
-| `LSTMForecaster` | Long Short-Term Memory neural network | Complex temporal patterns and sequences |
-
-## Covariate Support by Model
-
-Not every model uses external covariates `X`. The table below summarizes whether a model **accepts and uses** covariates during `fit()`/`predict()`.
-
-| Model | Supports covariates `X`? | Notes | Install |
-|------|---------------------------|-------|---------|
-| `VARForecaster` | No | Uses only past values of all series | Core |
-| `MovingAverageForecaster` | No | Baseline using recent averages | Core |
-| `ARIMAForecaster` | No | Pure ARIMA (not ARIMAX); ignores `X` | Core |
-| `ETSForecaster` | No | Exponential smoothing; ignores `X` | Core |
-| `LSTMForecaster` | No | Uses only lagged values of `y` (no `X` in current implementation) | `autotsforecast[neural]` |
-| `LinearForecaster` | Yes (required) | Requires `X` for both fit and predict | Core |
-| `RandomForestForecaster` | Yes (optional) | Uses lags + optional `X` (categoricals auto-encoded) | Core |
-| `XGBoostForecaster` | Yes (optional) | Uses lags + optional `X` (categoricals auto-encoded) | `autotsforecast[ml]` |
-| `ProphetForecaster` | Yes (optional) | Uses Prophet regressors when `X` is provided and aligned | `autotsforecast[prophet]` |
-
-## Documentation
-
-- 📘 **[Parameter Guide](PARAMETER_GUIDE.md)**: Quick navigation to find any parameter you need
-- 📕 **[API Reference](API_REFERENCE.md)**: Complete parameter documentation for all models and functions
-- 📗 **[Tutorial](examples/autotsforecast_tutorial.ipynb)**: Comprehensive hands-on guide
-- 📙 **[Quick Start](QUICKSTART.md)**: 5-minute getting started guide
-- 📄 **[Installation Guide](INSTALL.md)**: Detailed setup instructions
-- 📋 **[Changelog](CHANGELOG.md)**: Version history
-- 🔧 **[Technical Documentation](TECHNICAL_DOCUMENTATION.md)**: Architecture and design details
+See **[PARAMETER_GUIDE.md](PARAMETER_GUIDE.md)** for quick parameter lookup.
 
 ## Requirements
 
-**Core Dependencies:**
-- Python >= 3.8
-- numpy, pandas, scikit-learn, statsmodels, scipy
-
-**Optional Dependencies:**
-- matplotlib, seaborn (visualization)
-- shap (interpretability)
-- xgboost (XGBoost model)
-- prophet (Prophet model)
-- torch (LSTM model)
-
-## Contributing
-
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new features
-4. Submit a pull request
+- Python ≥ 3.8
+- Core: numpy, pandas, scikit-learn, statsmodels, scipy
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT License — see [LICENSE](LICENSE) for details.
+
+## Contributing
+
+Contributions welcome! Please fork the repo and submit a pull request.
 
 ## Citation
 
 ```bibtex
 @software{autotsforecast2025,
-  title={AutoTSForecast: Automated Multivariate Time Series Forecasting},
+  title={AutoTSForecast: Automated Time Series Forecasting},
   author={Weibin Xu},
   year={2025},
   url={https://github.com/weibinxu86/autotsforecast}
 }
 ```
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/weibinxu86/autotsforecast/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/weibinxu86/autotsforecast/discussions)
-- **Tutorial**: [examples/autotsforecast_tutorial.ipynb](examples/autotsforecast_tutorial.ipynb)
