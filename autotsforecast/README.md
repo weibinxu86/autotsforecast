@@ -4,10 +4,9 @@
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI](https://img.shields.io/pypi/v/autotsforecast)](https://pypi.org/project/autotsforecast/)
 
 AutoTSForecast automatically finds the best forecasting model for each of your time series. No more guessing whether Prophet, ARIMA, or XGBoost works best — let the algorithm decide.
-
-**📚 Full Documentation & Examples:** [https://github.com/weibinxu86/autotsforecast](https://github.com/weibinxu86/autotsforecast)
 
 ## Installation
 
@@ -145,15 +144,10 @@ importance = analyzer.calculate_feature_importance(X_test, y_test, method='sensi
 
 ## Documentation
 
-For complete documentation, examples, and API reference, visit:
-
-**[https://github.com/weibinxu86/autotsforecast](https://github.com/weibinxu86/autotsforecast)**
-
-Includes:
-- Full tutorial notebook with examples
-- Complete API reference
-- Parameter guide
-- Advanced features (hierarchical reconciliation, interpretability, backtesting)
+- [Quick Start Guide](QUICKSTART.md) — fastest overview
+- [API Reference](API_REFERENCE.md) — detailed parameter documentation
+- [Parameter Guide](PARAMETER_GUIDE.md) — model parameter recommendations
+- [Tutorial Notebook](examples/autotsforecast_tutorial.ipynb) — comprehensive examples
 
 ## Requirements
 
@@ -169,10 +163,11 @@ MIT License
 Contributions welcome! Visit the GitHub repository to get started.
 
 ```bibtex
-@software{autotsforecast2025,
+@software{autotsforecast2026,
   title={AutoTSForecast: Automated Time Series Forecasting},
   author={Weibin Xu},
-  year={2025},
+  year={2026},
   url={https://github.com/weibinxu86/autotsforecast}
 }
 ```
+
