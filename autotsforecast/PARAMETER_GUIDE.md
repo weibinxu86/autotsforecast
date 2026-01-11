@@ -61,7 +61,7 @@ Each model includes:
 **→ [API_REFERENCE.md - Hierarchical Reconciliation Section](API_REFERENCE.md#hierarchical-reconciliation)**
 
 Parameters and methods:
-- Reconciliation methods: `'bottom_up'`, `'top_down'`, `'middle_out'`, `'mint_ols'`, `'mint_shrink'`, `'mint_cov'`
+- Reconciliation methods: `'bottom_up'`, `'top_down'`, `'middle_out'`, `'ols'`
 - Hierarchy structure format
 - Usage examples
 
@@ -163,8 +163,7 @@ RandomForestForecaster(
 **Step 2:** Choose based on your needs:
 - **Trust bottom-level forecasts**: `method='bottom_up'`
 - **Trust top-level forecast**: `method='top_down'`
-- **Balanced approach**: `method='mint_ols'`
-- **Large hierarchies (recommended)**: `method='mint_shrink'`
+- **Balanced/optimal approach**: `method='ols'`
 
 ### 3. "How do I handle categorical features?"
 

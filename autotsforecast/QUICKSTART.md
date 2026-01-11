@@ -158,14 +158,12 @@ reconciler = HierarchicalReconciler(base_forecasts, hierarchy)
 
 # Reconcile using different methods
 reconciled_bu = reconciler.reconcile(method='bottom_up')
-reconciled_td = reconciler.reconcile(method='top_down', proportions='forecast')
-reconciled_opt = reconciler.reconcile(method='mint_shrink')
+reconciled_ols = reconciler.reconcile(method='ols')
 
 print("Reconciliation methods:")
-print("- bottom_up: Aggregate from lowest level")
-print("- top_down: Disaggregate from highest level")
-print("- mint_cov: MinTrace with covariance weighting")
-print("- mint_shrink: MinTrace with shrinkage (recommended)")
+print("- bottom_up: Aggregate from lowest level (keeps bottom forecasts)")
+print("- top_down: Disaggregate from highest level using proportions")
+print("- ols: OLS optimal reconciliation (minimizes total squared error)")
 ```
 
 ### 6. SHAP Model Interpretability
@@ -182,24 +180,25 @@ model.fit(y_train, X_train)
 # Create analyzer
 analyzer = DriverAnalyzer(model, feature_names=X_train.columns.tolist())
 
-# Calculate SHAP values
+# Calculate SHAP values (requires both X and y for lag reconstruction)
 shap_values = analyzer.calculate_shap_values(
-    X_test,
-    background_samples=X_train.sample(100),
+    X_train,
+    y_train,
     max_samples=100
 )
 
-# Visualize SHAP values
-analyzer.plot_shap_summary(
-    X_test,
-    shap_values,
-    target_name='North',
-    plot_type='dot'  # or 'bar', 'violin'
-)
-
-# Get feature importance from SHAP
+# Get SHAP feature importance
 shap_importance = analyzer.get_shap_feature_importance(shap_values)
 print(shap_importance)
+
+# Visualize SHAP summary plot
+import shap
+import matplotlib.pyplot as plt
+
+# Extract values for a specific series
+shap_array = shap_values['North']  # or target name
+shap.summary_plot(shap_array, X_train[['temperature', 'promotion']], plot_type='bar')
+```
 ```
 
 ### 7. Traditional Feature Importance
@@ -270,11 +269,9 @@ For complete parameter documentation, see **[API_REFERENCE.md](API_REFERENCE.md)
 
 ### HierarchicalReconciler
 - `method`: 
-  - `'bottom_up'`: Aggregate from bottom level
-  - `'top_down'`: Disaggregate from top (requires proportions)
-  - `'mint_ols'`: MinTrace with OLS
-  - `'mint_shrink'`: MinTrace with shrinkage (recommended)
-  - `'mint_cov'`: MinTrace with covariance
+  - `'bottom_up'`: Aggregate from bottom level (keeps bottom forecasts)
+  - `'top_down'`: Disaggregate from top using historical proportions
+  - `'ols'`: OLS optimal reconciliation (minimizes total squared error)
 
 ### CovariatePreprocessor
 - `encoding`: `'onehot'` (default) or `'label'` for categorical features

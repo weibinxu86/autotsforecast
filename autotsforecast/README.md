@@ -62,8 +62,8 @@ pip install "autotsforecast[all]"
 
 ```python
 from autotsforecast import AutoForecaster
-from autotsforecast.models.base import RandomForestForecaster, MovingAverageForecaster
-from autotsforecast.models.external import ARIMAForecaster, ProphetForecaster
+from autotsforecast.models.base import MovingAverageForecaster
+from autotsforecast.models.external import ARIMAForecaster, ProphetForecaster, RandomForestForecaster
 
 # Your time series data (pandas DataFrame)
 # y = pd.DataFrame({'series_a': [...], 'series_b': [...]})

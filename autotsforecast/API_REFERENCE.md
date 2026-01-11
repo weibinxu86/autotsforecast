@@ -446,15 +446,13 @@ reconcile(method: str = 'bottom_up') -> HierarchicalReconciler
 
 | Parameter | Type | Default | Allowed Values | Description |
 |-----------|------|---------|----------------|-------------|
-| `method` | str | `'bottom_up'` | `'bottom_up'`, `'top_down'`, `'middle_out'`, `'mint_ols'`, `'mint_shrink'`, `'mint_cov'` | Reconciliation method |
+| `method` | str | `'bottom_up'` | `'bottom_up'`, `'top_down'`, `'middle_out'`, `'ols'` | Reconciliation method |
 
 **Methods Explained:**
-- `'bottom_up'`: Aggregate from bottom level
-- `'top_down'`: Disaggregate from top using proportions
-- `'middle_out'`: Start from middle level
-- `'mint_ols'`: MinT optimal reconciliation (OLS)
-- `'mint_shrink'`: MinT with shrinkage
-- `'mint_cov'`: MinT with covariance estimation
+- `'bottom_up'`: Aggregate from bottom level (keeps bottom forecasts unchanged)
+- `'top_down'`: Disaggregate from top using historical proportions
+- `'middle_out'`: Start from middle level (simplified to bottom_up)
+- `'ols'`: OLS optimal reconciliation (minimizes total squared error)
 
 **Example:**
 ```python
@@ -499,12 +497,13 @@ calculate_feature_importance(X: pd.DataFrame, y: pd.DataFrame, method: str = 'co
 - `'shap'`: SHAP values (tree-based models)
 
 ```python
-calculate_shap_values(X: pd.DataFrame, background_samples: pd.DataFrame = None, max_samples: int = 100)
+calculate_shap_values(X: pd.DataFrame, y: pd.DataFrame, background_samples: pd.DataFrame = None, max_samples: int = 100)
 ```
 
 | Parameter | Type | Default | Allowed Values | Description |
-|-----------|------|---------|----------------|-------------|
-| `X` | pd.DataFrame | required | DataFrame | Feature data |
+|-----------|------|---------|----------------|--------------|
+| `X` | pd.DataFrame | required | DataFrame | Covariate data (external features) |
+| `y` | pd.DataFrame | required | DataFrame | Historical target data (needed to create lag features) |
 | `background_samples` | pd.DataFrame | `None` | DataFrame or None | Background for SHAP (None = auto-sample from X) |
 | `max_samples` | int | `100` | 50-500 | Maximum samples for SHAP calculation |
 
@@ -513,7 +512,13 @@ calculate_shap_values(X: pd.DataFrame, background_samples: pd.DataFrame = None, 
 from autotsforecast.interpretability import DriverAnalyzer
 
 analyzer = DriverAnalyzer(model, feature_names=['temp', 'promo'])
-importance = analyzer.calculate_feature_importance(X_train, y_train, method='shap')
+
+# Sensitivity analysis (works for all models)
+importance = analyzer.calculate_feature_importance(X_train, y_train, method='sensitivity')
+
+# SHAP values (tree-based models)
+shap_values = analyzer.calculate_shap_values(X_train, y_train)
+shap_importance = analyzer.get_shap_feature_importance(shap_values)
 ```
 
 ---
