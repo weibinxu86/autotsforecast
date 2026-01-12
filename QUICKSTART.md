@@ -90,6 +90,56 @@ model.fit(y_train, X_train)
 predictions = model.predict(X_test)
 ```
 
+### 3.1 Per-Series Covariates (Different Features per Series)
+
+When different series are driven by different factors:
+
+```python
+from autotsforecast import AutoForecaster
+from autotsforecast.models.external import RandomForestForecaster, ProphetForecaster
+
+# Product A: Weather-sensitive (uses temperature, advertising)
+# Product B: Price-sensitive (uses competitor price, promotions)
+
+X_train_dict = {
+    'product_a_sales': pd.DataFrame({
+        'temperature': [...],
+        'advertising_spend': [...]
+    }, index=dates_train),
+    'product_b_sales': pd.DataFrame({
+        'competitor_price': [...],
+        'promotion_active': [...]
+    }, index=dates_train)
+}
+
+X_test_dict = {
+    'product_a_sales': X_product_a_test,
+    'product_b_sales': X_product_b_test
+}
+
+# AutoForecaster with per-series covariates
+auto = AutoForecaster(
+    candidate_models=[
+        RandomForestForecaster(horizon=14, n_lags=7),
+        ProphetForecaster(horizon=14)
+    ],
+    per_series_models=True,
+    metric='rmse'
+)
+
+# Each series uses its own covariates
+auto.fit(y_train, X=X_train_dict)
+forecasts = auto.forecast(X=X_test_dict)
+
+print(auto.best_model_names_)  # e.g., {'product_a_sales': 'RandomForest', 'product_b_sales': 'Prophet'}
+```
+
+**Key Benefits:**
+- ✅ Each series uses only relevant features
+- ✅ Reduces noise from irrelevant covariates
+- ✅ Handles heterogeneous product portfolios
+- ✅ Backward compatible with single DataFrame
+
 ## Advanced Features
 
 ### 4. Standalone Backtesting (Independent Feature)
@@ -267,6 +317,13 @@ For complete parameter documentation, see **[API_REFERENCE.md](API_REFERENCE.md)
 - `per_series_models`: `True` (per-series selection) or `False` (global model)
 - `n_jobs`: `-1` for all CPU cores, or specific number (e.g., `4`)
 
+### Covariates (X parameter)
+- **Single DataFrame**: `X=pd.DataFrame(...)` — Same features for all series
+- **Per-Series Dictionary**: `X={'series_a': df_a, 'series_b': df_b}` — Different features per series
+  - Keys must match series names in `y`
+  - Each DataFrame must have same index as `y`
+  - Use with `per_series_models=True` for best results
+
 ### HierarchicalReconciler
 - `method`: 
   - `'bottom_up'`: Aggregate from bottom level (keeps bottom forecasts)
@@ -284,9 +341,10 @@ For complete parameter documentation, see **[API_REFERENCE.md](API_REFERENCE.md)
 1. **Start simple**: Try MovingAverage or VAR first before complex models
 2. **Use AutoForecaster**: Let it find the best model for your data
 3. **Covariates**: Add external features to improve accuracy
-4. **SHAP for understanding**: Use SHAP to understand which features drive predictions
-5. **Hierarchical reconciliation**: Ensures forecasts are coherent across levels
-6. **Horizon**: Balance between forecast accuracy (shorter) and planning needs (longer)
+4. **Per-Series Covariates**: Use different features for different series when they have different drivers
+5. **SHAP for understanding**: Use SHAP to understand which features drive predictions
+6. **Hierarchical reconciliation**: Ensures forecasts are coherent across levels
+7. **Horizon**: Balance between forecast accuracy (shorter) and planning needs (longer)
 
 ## Troubleshooting
 

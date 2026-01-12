@@ -85,13 +85,21 @@ candidates = [
     MovingAverageForecaster(horizon=14, window=7),
 ]
 
-# AutoForecaster picks the best model for EACH series
+# AutoForecaster picks the best model across all series (default)
 auto = AutoForecaster(candidate_models=candidates, metric='rmse')
 auto.fit(y_train)
 forecasts = auto.forecast()
 
-# See which models were selected
-print(auto.best_model_name_)  # e.g., {'series_a': 'Prophet', 'series_b': 'ARIMA'}
+# See which model was selected
+print(auto.best_model_name_)  # e.g., 'ProphetForecaster'
+
+# OR: Pick the best model for EACH series separately
+auto = AutoForecaster(candidate_models=candidates, metric='rmse', per_series_models=True)
+auto.fit(y_train)
+forecasts = auto.forecast()
+
+# See which models were selected per series
+print(auto.best_model_names_)  # e.g., {'series_a': 'ProphetForecaster', 'series_b': 'ARIMAForecaster'}
 ```
 
 ### 2. Using Covariates (External Features)
@@ -105,7 +113,73 @@ model.fit(y_train, X=X_train)
 forecasts = model.predict(X=X_test)
 ```
 
-**Models supporting covariates:** Prophet, ARIMA, XGBoost, RandomForest, LSTM
+**Models supporting covariates:** Prophet, XGBoost, RandomForest, Linear
+
+### 2.1 Per-Series Covariates — Different Features for Each Series
+
+**Use Case:** When different time series are driven by different external factors.
+
+```python
+from autotsforecast import AutoForecaster
+from autotsforecast.models.base import LinearForecaster
+from autotsforecast.models.external import RandomForestForecaster, XGBoostForecaster
+
+# Example: Forecasting sales for different products
+# Product A: Summer product (driven by weather and advertising)
+X_product_a = pd.DataFrame({
+    'temperature': [...],      # Weather matters for Product A
+    'advertising_spend': [...] # Marketing campaigns
+}, index=dates)
+
+# Product B: Everyday product (driven by pricing and promotions)
+X_product_b = pd.DataFrame({
+    'competitor_price': [...],  # Price competition matters for Product B
+    'promotion_active': [...]   # Promotional events
+}, index=dates)
+
+# Create dictionary mapping each series to its covariates
+X_train_dict = {
+    'product_a_sales': X_product_a_train,
+    'product_b_sales': X_product_b_train
+}
+
+X_test_dict = {
+    'product_a_sales': X_product_a_test,
+    'product_b_sales': X_product_b_test
+}
+
+# Define candidate models
+candidates = [
+    LinearForecaster(horizon=14),
+    RandomForestForecaster(horizon=14, n_lags=7),
+    XGBoostForecaster(horizon=14, n_lags=7)
+]
+
+# AutoForecaster with per-series model selection
+auto = AutoForecaster(
+    candidate_models=candidates,
+    per_series_models=True,  # Select best model for each series
+    metric='rmse'
+)
+
+# Fit: Each series uses its own covariates
+auto.fit(y_train, X=X_train_dict)
+
+# Forecast: Provide future covariates for each series
+forecasts = auto.forecast(X=X_test_dict)
+
+# See which model was selected for each series
+print(auto.best_model_names_)
+# Output: {'product_a_sales': 'RandomForestForecaster', 
+#          'product_b_sales': 'XGBoostForecaster'}
+```
+
+**Key Benefits:**
+- ✅ Each series uses only relevant features (reduces noise)
+- ✅ Better accuracy through targeted feature engineering
+- ✅ Handle heterogeneous products with different drivers
+- ✅ Scalable to large portfolios with diverse characteristics
+- ✅ Backward compatible: still works with single DataFrame for all series
 
 ### 3. Hierarchical Reconciliation
 

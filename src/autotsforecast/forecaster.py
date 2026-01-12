@@ -142,6 +142,7 @@ class AutoForecaster:
         self.feature_names_ = None
         self._last_index_ = None
         self._freq_ = None
+        self._per_series_covariates_ = None  # Store per-series covariate mapping
 
     def _infer_freq(self, y_index) -> Optional[str]:
         if not isinstance(y_index, pd.DatetimeIndex):
@@ -192,7 +193,7 @@ class AutoForecaster:
                     f"Original error: {e}. Fallback error: {e2}"
                 )
         
-    def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'AutoForecaster':
+    def fit(self, y: pd.DataFrame, X: Optional[Union[pd.DataFrame, Dict[str, pd.DataFrame]]] = None) -> 'AutoForecaster':
         """
         Evaluate candidate models and select the best one.
         
@@ -200,8 +201,11 @@ class AutoForecaster:
         ----------
         y : pd.DataFrame
             Historical time series data
-        X : pd.DataFrame, optional
-            Exogenous variables (if needed by models)
+        X : pd.DataFrame or Dict[str, pd.DataFrame], optional
+            Exogenous variables. Can be:
+            - pd.DataFrame: Same covariates used for all series
+            - Dict[str, pd.DataFrame]: Different covariates per series
+              Keys are series names, values are covariate DataFrames
             
         Returns
         -------
@@ -226,17 +230,35 @@ class AutoForecaster:
         self._last_index_ = y.index[-1] if len(y.index) else None
         self._freq_ = self._infer_freq(y.index)
 
+        # Handle per-series covariates
+        if isinstance(X, dict):
+            self._per_series_covariates_ = X
+            # Validate that all series have covariates if dict is provided
+            missing_series = set(self.feature_names_) - set(X.keys())
+            if missing_series:
+                raise ValueError(f"Per-series covariates missing for: {missing_series}. "
+                               f"Provide covariates for all series or use a single DataFrame.")
+        else:
+            self._per_series_covariates_ = None
+
         # Per-series model selection mode: select a best model for each time series.
         if self.per_series_models:
             from joblib import Parallel, delayed
 
             def fit_one_series(series_name: str):
                 y_single = y[[series_name]]
+                
+                # Get covariates for this series
+                if self._per_series_covariates_ is not None:
+                    X_series = self._per_series_covariates_.get(series_name)
+                else:
+                    X_series = X
 
                 best_score = float('inf') if self.metric != 'r2' else float('-inf')
                 best_model = None
                 best_name = None
                 series_cv_results: Dict[str, Any] = {}
+                errors = []  # Track errors for debugging
 
                 for candidate in self.candidate_models:
                     # Skip VAR in univariate mode (requires 2+ series)
@@ -257,7 +279,7 @@ class AutoForecaster:
                             test_size=self.test_size,
                             window_type=self.window_type,
                         )
-                        cv = validator.run(y_single, X)
+                        cv = validator.run(y_single, X_series)
                         series_cv_results[model_name] = cv
                         score = cv[self.metric]
                         is_better = (score < best_score) if self.metric != 'r2' else (score > best_score)
@@ -265,14 +287,18 @@ class AutoForecaster:
                             best_score = score
                             best_model = model
                             best_name = model_name
-                    except Exception:
+                    except Exception as ex:
+                        errors.append(f"{model_name}: {str(ex)[:100]}")
                         continue
 
                 if best_model is None:
-                    raise ValueError(f"No valid models found for series '{series_name}'.")
+                    error_msg = f"No valid models found for series '{series_name}'."
+                    if errors:
+                        error_msg += f" Errors: {'; '.join(errors[:3])}"
+                    raise ValueError(error_msg)
 
-                # Retrain best model on full series
-                best_model.fit(y_single, X)
+                # Retrain best model on full series with its covariates
+                best_model.fit(y_single, X_series)
                 return series_name, best_model, best_name, best_score, series_cv_results
 
             results = Parallel(n_jobs=self.n_jobs)(
@@ -365,14 +391,17 @@ class AutoForecaster:
         
         return self
     
-    def forecast(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    def forecast(self, X: Optional[Union[pd.DataFrame, Dict[str, pd.DataFrame]]] = None) -> pd.DataFrame:
         """
         Generate forecasts using the best model.
         
         Parameters
         ----------
-        X : pd.DataFrame, optional
-            Future exogenous variables (if required by model)
+        X : pd.DataFrame or Dict[str, pd.DataFrame], optional
+            Future exogenous variables. Can be:
+            - pd.DataFrame: Same covariates for all series
+            - Dict[str, pd.DataFrame]: Different covariates per series
+              Keys are series names, values are covariate DataFrames
             
         Returns
         -------
@@ -401,8 +430,32 @@ class AutoForecaster:
 
             future_index = self._future_index(horizon)
             preds: Dict[str, np.ndarray] = {}
+            
+            # Handle per-series covariates for prediction
+            X_dict = {}
+            if isinstance(X, dict):
+                X_dict = X
+            elif self._per_series_covariates_ is not None and X is None:
+                # Use the same per-series structure but no future values provided
+                pass
+            else:
+                # Single X for all series
+                pass
+            
             for col, model in self.best_models_.items():
-                p = model.predict(X)
+                # Get covariates for this series
+                if isinstance(X, dict):
+                    X_series = X.get(col)
+                elif self._per_series_covariates_ is not None:
+                    # If trained with per-series covariates, must provide them for prediction
+                    if X is None:
+                        raise ValueError(f"Model for '{col}' was trained with covariates but none provided for prediction. "
+                                       f"Provide a dict with covariates for each series.")
+                    X_series = X
+                else:
+                    X_series = X
+                
+                p = model.predict(X_series)
                 # Accept either single-column df or multi; normalize to 1d array
                 if isinstance(p, pd.DataFrame):
                     if col in p.columns:

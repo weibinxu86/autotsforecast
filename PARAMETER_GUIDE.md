@@ -8,6 +8,8 @@ This guide helps you quickly find the parameter information you need.
 
 | Goal | Document | Section |
 |------|----------|---------|
+| Use per-series covariates (different features per series) | [API_REFERENCE.md](API_REFERENCE.md) | "Per-Series Covariates" |
+| See per-series covariates examples | [Tutorial](examples/autotsforecast_tutorial.ipynb) | Section 4: "Per-Series Covariates" |
 | See ALL possible parameter values for every function | [API_REFERENCE.md](API_REFERENCE.md) | Entire document |
 | Learn how to use standalone backtesting | [API_REFERENCE.md](API_REFERENCE.md) | "Backtesting (Standalone Feature)" |
 | See backtesting examples in action | [Tutorial](examples/autotsforecast_tutorial.ipynb) | Section 2.5: "Independent Backtesting Module" |
@@ -27,6 +29,11 @@ This guide helps you quickly find the parameter information you need.
 
 All parameters with allowed values and defaults:
 - `candidate_models`, `metric`, `n_splits`, `test_size`, `window_type`, `verbose`, `per_series_models`, `n_jobs`
+
+**Per-Series Covariates:**
+- Pass `X` as `Dict[str, pd.DataFrame]` to use different covariates per series
+- Each key = series name, value = that series' covariate DataFrame
+- See [API_REFERENCE.md - Per-Series Covariates](API_REFERENCE.md#per-series-covariates)
 
 ### 2. BacktestValidator (Standalone Backtesting)
 **→ [API_REFERENCE.md - Backtesting Section](API_REFERENCE.md#backtesting)**
@@ -189,7 +196,47 @@ preprocessor = CovariatePreprocessor(
 X_processed = preprocessor.fit_transform(X_train)
 ```
 
-### 4. "How do I validate my model's performance using backtesting?"
+### 4. "How do I use different covariates for different series?"
+
+**Step 1:** See complete documentation in [API_REFERENCE.md - Per-Series Covariates](API_REFERENCE.md#per-series-covariates)
+
+**Step 2:** Create a dictionary mapping each series to its covariates:
+```python
+from autotsforecast import AutoForecaster
+from autotsforecast.models.external import ProphetForecaster, RandomForestForecaster
+
+# Different features for different products
+X_train_dict = {
+    'product_a': pd.DataFrame({  # Weather-sensitive product
+        'temperature': [...],
+        'advertising_spend': [...]
+    }, index=dates_train),
+    'product_b': pd.DataFrame({  # Price-sensitive product
+        'competitor_price': [...],
+        'promotion_active': [...]
+    }, index=dates_train)
+}
+
+X_test_dict = {
+    'product_a': X_a_test,
+    'product_b': X_b_test
+}
+
+# Train with per-series covariates
+auto = AutoForecaster(
+    candidate_models=[
+        ProphetForecaster(horizon=14),
+        RandomForestForecaster(horizon=14, n_lags=7)
+    ],
+    per_series_models=True
+)
+auto.fit(y_train, X=X_train_dict)
+forecasts = auto.forecast(X=X_test_dict)
+```
+
+**Step 3:** See practical examples in [Tutorial - Section 4](examples/autotsforecast_tutorial.ipynb)
+
+### 5. "How do I validate my model's performance using backtesting?"
 
 **Step 1:** See complete documentation in [API_REFERENCE.md - BacktestValidator](API_REFERENCE.md#backtesting)
 
@@ -231,6 +278,7 @@ validator.plot_results()
 | Document | Purpose | When to Use |
 |----------|---------|-------------|
 | [API_REFERENCE.md](API_REFERENCE.md) | **Complete** parameter tables for all functions | Looking up exact allowed values |
+| [API_REFERENCE.md - Per-Series Covariates](API_REFERENCE.md#per-series-covariates) | Per-series covariate documentation | Using different features per series |
 | [Tutorial](examples/autotsforecast_tutorial.ipynb) | Hands-on guide with **practical** parameter recommendations | Learning how to use the package |
 | [QUICKSTART.md](QUICKSTART.md) | Quick examples with **common** parameter values | Getting started quickly |
 | [README.md](README.md) | Package overview and **high-level** features | Understanding what the package does |

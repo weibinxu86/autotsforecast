@@ -4,6 +4,7 @@ Complete parameter documentation for all models and classes in AutoTSForecast.
 
 ## Table of Contents
 - [AutoForecaster](#autoforecaster)
+  - [Per-Series Covariates](#per-series-covariates)
 - [Backtesting (Standalone Feature)](#backtesting)
 - [Forecasting Models](#forecasting-models)
 - [Hierarchical Reconciliation](#hierarchical-reconciliation)
@@ -32,16 +33,67 @@ Automatic model selection with cross-validation.
 ### Methods
 
 ```python
-fit(y: pd.DataFrame, X: Optional[pd.DataFrame] = None)
+fit(y: pd.DataFrame, X: Optional[Union[pd.DataFrame, Dict[str, pd.DataFrame]]] = None)
 ```
 - `y`: Target time series (DatetimeIndex, multiple columns)
-- `X`: Optional covariates (same index as y)
+- `X`: Optional covariates. Can be:
+  - `pd.DataFrame`: Same covariates used for all series
+  - `Dict[str, pd.DataFrame]`: **Per-series covariates** — different features for each series (keys = series names, values = covariate DataFrames)
 
 ```python
-forecast(X: Optional[pd.DataFrame] = None) -> pd.DataFrame
+forecast(X: Optional[Union[pd.DataFrame, Dict[str, pd.DataFrame]]] = None) -> pd.DataFrame
 ```
-- `X`: Future covariates for forecast period (required if model was trained with covariates)
+- `X`: Future covariates for forecast period. Format must match training:
+  - If trained with `pd.DataFrame`, provide `pd.DataFrame`
+  - If trained with `Dict[str, pd.DataFrame]`, provide `Dict[str, pd.DataFrame]`
 - Returns: pd.DataFrame with point forecasts
+
+---
+
+### Per-Series Covariates
+
+**Use Case:** When different time series are driven by different external factors.
+
+Instead of forcing all series to use the same features, you can specify different covariates for each series:
+
+```python
+# Define different covariates for each series
+X_train_dict = {
+    'product_a': pd.DataFrame({  # Weather-sensitive product
+        'temperature': [...],
+        'advertising_spend': [...]
+    }, index=dates),
+    'product_b': pd.DataFrame({  # Price-sensitive product
+        'competitor_price': [...],
+        'promotion_active': [...]
+    }, index=dates)
+}
+
+X_test_dict = {
+    'product_a': X_product_a_test,
+    'product_b': X_product_b_test
+}
+
+# Fit with per-series covariates
+auto = AutoForecaster(
+    candidate_models=[...],
+    per_series_models=True,
+    metric='rmse'
+)
+auto.fit(y_train, X=X_train_dict)
+forecasts = auto.forecast(X=X_test_dict)
+```
+
+**Key Benefits:**
+- ✅ Each series uses only relevant features (reduces noise from irrelevant features)
+- ✅ Better accuracy through targeted feature engineering
+- ✅ Handles heterogeneous portfolios with different drivers
+- ✅ Backward compatible: still works with single DataFrame for all series
+
+**Requirements:**
+- All series in `y` must have corresponding entries in the covariate dictionary
+- Each covariate DataFrame must have the same index as `y`
+- For forecasting, provide future covariates in the same dictionary format
 
 ---
 
@@ -557,6 +609,26 @@ auto = AutoForecaster(
 )
 auto.fit(y_train, X_train)
 forecasts = auto.forecast(X_test)
+```
+
+### Per-Series Covariates (Different Features per Series)
+```python
+# Different features for each series
+X_train_dict = {
+    'product_a': pd.DataFrame({'temperature': [...], 'ads': [...]}, index=dates),
+    'product_b': pd.DataFrame({'price': [...], 'promo': [...]}, index=dates)
+}
+X_test_dict = {
+    'product_a': X_a_test,
+    'product_b': X_b_test
+}
+
+auto = AutoForecaster(
+    candidate_models=[model1, model2],
+    per_series_models=True
+)
+auto.fit(y_train, X=X_train_dict)
+forecasts = auto.forecast(X=X_test_dict)
 ```
 
 ### With Hierarchical Reconciliation
