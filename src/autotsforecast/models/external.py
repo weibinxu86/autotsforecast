@@ -47,10 +47,7 @@ def _import_torch():
 
 
 class RandomForestForecaster(BaseForecaster):
-    """
-
-    supports_covariates: bool = True
-    Random Forest forecaster with lag features and covariate support.
+    """Random Forest forecaster with lag features and covariate support.
     
     Automatically handles both categorical and numerical covariates:
     - Categorical features: One-hot encoded or label encoded
@@ -256,10 +253,7 @@ class RandomForestForecaster(BaseForecaster):
 
 
 class XGBoostForecaster(BaseForecaster):
-    """
-
-    supports_covariates: bool = True
-    XGBoost forecaster with lag features and covariate support.
+    """XGBoost forecaster with lag features and covariate support.
     
     Automatically handles both categorical and numerical covariates:
     - Categorical features: One-hot encoded or label encoded

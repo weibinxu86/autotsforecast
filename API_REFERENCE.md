@@ -28,7 +28,7 @@ Automatic model selection with cross-validation.
 | `window_type` | str | `'expanding'` | `'expanding'`, `'rolling'` | CV window type |
 | `verbose` | bool | `True` | `True`, `False` | Print progress messages |
 | `per_series_models` | bool | `False` | `True`, `False` | Select different model per series |
-| `n_jobs` | int | `-1` | -1, 1 to CPU_count | Parallel processing (-1 = all cores) |
+| `n_jobs` | int | `1` | 1 to CPU_count, -1 | Parallel jobs (1 = sequential, -1 = all cores) |
 
 ### Methods
 
@@ -486,8 +486,8 @@ from autotsforecast.hierarchical import HierarchicalReconciler
 
 hierarchy = {'Total': ['North', 'South', 'East']}
 reconciler = HierarchicalReconciler(forecasts, hierarchy)
-result = reconciler.reconcile(method='mint_shrink')
-reconciled_forecasts = result.reconciled_forecasts
+reconciler.reconcile(method='ols')
+reconciled_forecasts = reconciler.reconciled_forecasts
 ```
 
 ---
@@ -604,8 +604,7 @@ forecasts = model.predict(X_test)
 auto = AutoForecaster(
     candidate_models=[model1, model2, model3],
     n_splits=3,
-    per_series_models=True,
-    n_jobs=-1
+    per_series_models=True
 )
 auto.fit(y_train, X_train)
 forecasts = auto.forecast(X_test)
@@ -638,8 +637,8 @@ base_forecasts = auto.forecast(X_test)
 
 hierarchy = {'Total': ['Region_A', 'Region_B']}
 reconciler = HierarchicalReconciler(base_forecasts, hierarchy)
-result = reconciler.reconcile(method='mint_ols')
-reconciled = result.reconciled_forecasts
+reconciler.reconcile(method='ols')
+reconciled = reconciler.reconciled_forecasts
 ```
 
 ### With Feature Importance

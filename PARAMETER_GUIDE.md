@@ -9,11 +9,11 @@ This guide helps you quickly find the parameter information you need.
 | Goal | Document | Section |
 |------|----------|---------|
 | Use per-series covariates (different features per series) | [API_REFERENCE.md](API_REFERENCE.md) | "Per-Series Covariates" |
-| See per-series covariates examples | [Tutorial](examples/autotsforecast_tutorial.ipynb) | Section 4: "Per-Series Covariates" |
+| See per-series covariates examples | [Tutorial](examples/autotsforecast_tutorial.ipynb) | Part 1: "Per-Series Covariates" section |
 | See ALL possible parameter values for every function | [API_REFERENCE.md](API_REFERENCE.md) | Entire document |
 | Learn how to use standalone backtesting | [API_REFERENCE.md](API_REFERENCE.md) | "Backtesting (Standalone Feature)" |
-| See backtesting examples in action | [Tutorial](examples/autotsforecast_tutorial.ipynb) | Section 2.5: "Independent Backtesting Module" |
-| Get practical parameter recommendations | [Tutorial](examples/autotsforecast_tutorial.ipynb) | Cell 9: "MODEL PARAMETER GUIDANCE" |
+| See backtesting examples in action | [QUICKSTART.md](QUICKSTART.md) | "Standalone Backtesting" section |
+| Get practical parameter recommendations | [API_REFERENCE.md](API_REFERENCE.md) | "Tips and Best Practices" section |
 | See quick parameter examples for common tasks | [QUICKSTART.md](QUICKSTART.md) | "Common Parameters" section |
 | Understand what each model does | [README.md](README.md) | "Available Models" table |
 | Learn how AutoForecaster works | [README.md](README.md) | "How It Works" section |
@@ -94,7 +94,7 @@ CovariatePreprocessor parameters:
 ## Practical Parameter Recommendations
 
 ### For Beginners
-**→ [Tutorial - Cell 9](examples/autotsforecast_tutorial.ipynb)**
+**→ [API_REFERENCE.md - Tips and Best Practices](API_REFERENCE.md#tips-and-best-practices)**
 
 Practical value ranges with explanations:
 - "What values should I use for `n_lags`?" → 7-30 for most cases
@@ -158,7 +158,7 @@ RandomForestForecaster(
 )
 ```
 
-**Step 2:** See recommended values in [Tutorial - Cell 9](examples/autotsforecast_tutorial.ipynb)
+**Step 2:** See recommended values in [API_REFERENCE.md - Tips and Best Practices](API_REFERENCE.md#tips-and-best-practices)
 - `n_lags`: 7-30 (more = more history, slower)
 - `n_estimators`: 100-500 (more = better accuracy, slower)
 - `max_depth`: None (unlimited) or 5-20 (controls overfitting)
@@ -234,7 +234,7 @@ auto.fit(y_train, X=X_train_dict)
 forecasts = auto.forecast(X=X_test_dict)
 ```
 
-**Step 3:** See practical examples in [Tutorial - Section 4](examples/autotsforecast_tutorial.ipynb)
+**Step 3:** See practical examples in [Tutorial - Part 1](examples/autotsforecast_tutorial.ipynb)
 
 ### 5. "How do I validate my model's performance using backtesting?"
 
@@ -269,7 +269,7 @@ summary = validator.get_summary()
 validator.plot_results()
 ```
 
-**Step 3:** See practical examples in [Tutorial - Section 2.5](examples/autotsforecast_tutorial.ipynb)
+**Step 3:** See practical examples in [QUICKSTART.md](QUICKSTART.md)
 
 ---
 

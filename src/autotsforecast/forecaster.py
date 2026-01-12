@@ -119,7 +119,7 @@ class AutoForecaster:
         window_type: str = 'expanding',
         verbose: bool = True,
         per_series_models: bool = False,
-        n_jobs: int = -1,
+        n_jobs: int = 1,
     ):
         self.candidate_models = candidate_models
         self.metric = metric
@@ -294,7 +294,7 @@ class AutoForecaster:
                 if best_model is None:
                     error_msg = f"No valid models found for series '{series_name}'."
                     if errors:
-                        error_msg += f" Errors: {'; '.join(errors[:3])}"
+                        error_msg += f" Errors: {'; '.join(errors)}"
                     raise ValueError(error_msg)
 
                 # Retrain best model on full series with its covariates

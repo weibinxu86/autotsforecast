@@ -315,7 +315,7 @@ For complete parameter documentation, see **[API_REFERENCE.md](API_REFERENCE.md)
 - `test_size`: Validation window size (typically = horizon)
 - `window_type`: `'expanding'` (recommended) or `'rolling'`
 - `per_series_models`: `True` (per-series selection) or `False` (global model)
-- `n_jobs`: `-1` for all CPU cores, or specific number (e.g., `4`)
+- `n_jobs`: `1` (sequential, default) or `-1` for all CPU cores
 
 ### Covariates (X parameter)
 - **Single DataFrame**: `X=pd.DataFrame(...)` — Same features for all series
