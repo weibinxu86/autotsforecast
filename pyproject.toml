@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autotsforecast"
-version = "0.2.2"
-description = "Automated multivariate time series forecasting with model selection, backtesting, hierarchical reconciliation, and interpretability."
+version = "0.3.3"
+description = "Automated multivariate time series forecasting with model selection, backtesting, hierarchical reconciliation, prediction intervals, and interpretability."
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Weibin Xu", email = "weibinxu86@gmail.com" }]
-keywords = ["time series", "forecasting", "multivariate", "automated", "hierarchical", "interpretability", "shap"]
+keywords = ["time series", "forecasting", "multivariate", "automated", "hierarchical", "interpretability", "shap", "prediction intervals", "conformal prediction"]
 classifiers = [
 	"Development Status :: 3 - Alpha",
 	"Intended Audience :: Science/Research",
@@ -22,6 +22,7 @@ classifiers = [
 	"Programming Language :: Python :: 3.9",
 	"Programming Language :: Python :: 3.10",
 	"Programming Language :: Python :: 3.11",
+	"Programming Language :: Python :: 3.12",
 	"Operating System :: OS Independent",
 ]
 dependencies = [
@@ -37,6 +38,11 @@ dependencies = [
 viz = [
 	"matplotlib>=3.4.0",
 	"seaborn>=0.11.0",
+	"plotly>=5.0.0",
+]
+progress = [
+	"rich>=12.0.0",
+	"tqdm>=4.60.0",
 ]
 interpret = [
 	"shap>=0.42.0",
@@ -52,6 +58,9 @@ neural = [
 	"torch>=2.0.0",
 	"lightning>=2.0.0",
 ]
+holidays = [
+	"holidays>=0.25",
+]
 dev = [
 	"pytest>=7.0.0",
 	"pytest-cov>=3.0.0",
@@ -65,12 +74,16 @@ dev = [
 all = [
 	"matplotlib>=3.4.0",
 	"seaborn>=0.11.0",
+	"plotly>=5.0.0",
+	"rich>=12.0.0",
+	"tqdm>=4.60.0",
 	"shap>=0.42.0",
 	"xgboost>=2.0.0",
 	"prophet>=1.1.0",
 	"darts>=0.27.0",
 	"torch>=2.0.0",
 	"lightning>=2.0.0",
+	"holidays>=0.25",
 ]
 
 [project.urls]

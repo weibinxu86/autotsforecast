@@ -1,11 +1,10 @@
 # Manifest for source distribution
 include README.md
 include LICENSE
-include CHANGELOG.md
-include INSTALL.md
 include QUICKSTART.md
 include API_REFERENCE.md
 include PARAMETER_GUIDE.md
+include RELEASE_NOTES.md
 include TECHNICAL_DOCUMENTATION.md
 
 recursive-include src *.py

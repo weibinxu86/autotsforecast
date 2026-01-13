@@ -1,6 +1,6 @@
 # API Reference
 
-Complete parameter documentation for all models and classes in AutoTSForecast.
+Complete parameter documentation for all models and classes in AutoTSForecast v0.3.1.
 
 ## Table of Contents
 - [AutoForecaster](#autoforecaster)
@@ -10,6 +10,10 @@ Complete parameter documentation for all models and classes in AutoTSForecast.
 - [Hierarchical Reconciliation](#hierarchical-reconciliation)
 - [Interpretability Tools](#interpretability-tools)
 - [Preprocessing](#preprocessing)
+- [Calendar Features](#calendar-features)
+- [Prediction Intervals](#prediction-intervals)
+- [Visualization](#visualization)
+- [Parallel Processing](#parallel-processing)
 
 ---
 
@@ -687,3 +691,387 @@ importance = analyzer.calculate_feature_importance(X_train, y_train, method='sha
 - **[Tutorial](examples/autotsforecast_tutorial.ipynb)**: Comprehensive hands-on guide
 - **[QUICKSTART.md](QUICKSTART.md)**: 5-minute getting started guide
 - **[GitHub Issues](https://github.com/weibinxu86/autotsforecast/issues)**: Bug reports and feature requests
+
+---
+
+## Calendar Features
+
+### CalendarFeatures
+
+Automatic extraction of time-based features from datetime indices.
+
+**Parameters:**
+
+| Parameter | Type | Default | Allowed Values | Description |
+|-----------|------|---------|----------------|-------------|
+| `features` | list | `'auto'` | `'auto'` or list of strings | Features to extract (auto-detect or specify) |
+| `cyclical_encoding` | bool | `True` | `True`, `False` | Use sin/cos encoding for cyclical features |
+| `fourier_terms` | dict | `None` | Dict[str, Tuple[float, int]] | Fourier terms: `{'name': (period, n_terms)}` |
+| `holidays` | str/list | `None` | Country code or list | Holiday detection (e.g., 'US', 'UK') |
+
+**Available Features:**
+- `'dayofweek'` — Day of week (0-6)
+- `'month'` — Month (1-12)
+- `'day'` — Day of month (1-31)
+- `'quarter'` — Quarter (1-4)
+- `'week'` — Week of year (1-52)
+- `'is_weekend'` — Weekend flag (0/1)
+- `'is_month_start'` — Month start flag
+- `'is_month_end'` — Month end flag
+
+**Methods:**
+
+```python
+fit(data: pd.DataFrame) -> CalendarFeatures
+```
+Fit to data to determine feature set (if `features='auto'`).
+
+```python
+transform(data: pd.DataFrame) -> pd.DataFrame
+```
+Extract calendar features from the data's datetime index.
+
+```python
+fit_transform(data: pd.DataFrame) -> pd.DataFrame
+```
+Fit and transform in one step.
+
+```python
+transform_future(horizon: int, freq: str = 'D') -> pd.DataFrame
+```
+Generate calendar features for future dates.
+
+**Example:**
+```python
+from autotsforecast.features.calendar import CalendarFeatures
+
+# Auto-detect features with cyclical encoding
+cal = CalendarFeatures(cyclical_encoding=True)
+features = cal.fit_transform(y_train)
+
+# Custom features with Fourier terms
+cal = CalendarFeatures(
+    features=['dayofweek', 'month', 'is_weekend'],
+    fourier_terms={'weekly': (7, 2), 'yearly': (365.25, 3)},
+    cyclical_encoding=True
+)
+features = cal.fit_transform(y_train)
+
+# Generate future calendar features
+future_features = cal.transform_future(horizon=30)
+```
+
+### add_calendar_features (Convenience Function)
+
+```python
+add_calendar_features(
+    data: pd.DataFrame,
+    features: list = 'auto',
+    cyclical_encoding: bool = True
+) -> pd.DataFrame
+```
+
+One-step function to add calendar features to a DataFrame.
+
+---
+
+## Prediction Intervals
+
+### PredictionIntervals
+
+Generate prediction intervals using conformal prediction, residual-based, or empirical methods.
+
+**Parameters:**
+
+| Parameter | Type | Default | Allowed Values | Description |
+|-----------|------|---------|----------------|-------------|
+| `method` | str | `'conformal'` | `'conformal'`, `'residual'`, `'empirical'` | Interval estimation method |
+| `coverage` | list | `[0.95]` | List of floats 0-1 | Coverage levels (e.g., `[0.80, 0.95]`) |
+
+**Methods:**
+
+```python
+fit(model: BaseForecaster, y_train: pd.DataFrame, X_train: pd.DataFrame = None)
+```
+Fit the interval estimator by computing residuals from the fitted model.
+
+```python
+predict(point_forecast: pd.DataFrame) -> dict
+```
+Generate prediction intervals around point forecasts.
+- Returns: `{'point': df, 'lower_80': df, 'upper_80': df, 'lower_95': df, 'upper_95': df}`
+
+**Methods Explained:**
+- `'conformal'`: Uses conformal prediction with calibration residuals. Provides distribution-free coverage guarantees.
+- `'residual'`: Uses standard deviation of residuals × z-score for Gaussian intervals.
+- `'empirical'`: Uses empirical quantiles of residuals for non-parametric intervals.
+
+**Example:**
+```python
+from autotsforecast.uncertainty.intervals import PredictionIntervals
+
+# Fit model first
+model = RandomForestForecaster(horizon=14)
+model.fit(y_train, X=X_train)
+forecasts = model.predict(X=X_test)
+
+# Create prediction intervals
+pi = PredictionIntervals(method='conformal', coverage=[0.80, 0.95])
+pi.fit(model, y_train)
+intervals = pi.predict(forecasts)
+
+# Access intervals
+lower_95 = intervals['lower_95']
+upper_95 = intervals['upper_95']
+print(f"95% interval: [{lower_95.iloc[0, 0]:.1f}, {upper_95.iloc[0, 0]:.1f}]")
+```
+
+### ConformalPredictor
+
+Online conformal predictor for streaming updates.
+
+**Parameters:**
+
+| Parameter | Type | Default | Allowed Values | Description |
+|-----------|------|---------|----------------|-------------|
+| `coverage` | float | `0.95` | 0.0-1.0 | Target coverage level |
+
+**Methods:**
+
+```python
+fit(residuals: np.ndarray)
+```
+Initialize with calibration residuals.
+
+```python
+update(new_residual: float)
+```
+Update with new observation for online learning.
+
+```python
+get_interval(point_forecast: float) -> Tuple[float, float]
+```
+Get prediction interval for a single point forecast.
+
+---
+
+## Visualization
+
+### plot_forecast
+
+Create static forecast visualization with matplotlib.
+
+```python
+plot_forecast(
+    y_train: pd.Series,
+    y_test: pd.Series = None,
+    forecast: pd.Series = None,
+    lower: pd.Series = None,
+    upper: pd.Series = None,
+    title: str = 'Forecast',
+    figsize: tuple = (12, 6)
+) -> matplotlib.figure.Figure
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `y_train` | pd.Series | required | Historical training data |
+| `y_test` | pd.Series | `None` | Actual test values (optional) |
+| `forecast` | pd.Series | `None` | Point forecasts |
+| `lower` | pd.Series | `None` | Lower bound of prediction interval |
+| `upper` | pd.Series | `None` | Upper bound of prediction interval |
+| `title` | str | `'Forecast'` | Plot title |
+| `figsize` | tuple | `(12, 6)` | Figure size |
+
+**Example:**
+```python
+from autotsforecast.visualization.plots import plot_forecast
+
+fig = plot_forecast(
+    y_train=y_train['series_a'],
+    y_test=y_test['series_a'],
+    forecast=forecasts['series_a'],
+    lower=intervals['lower_95']['series_a'],
+    upper=intervals['upper_95']['series_a'],
+    title='Sales Forecast with 95% PI'
+)
+plt.show()
+```
+
+### plot_forecast_interactive
+
+Create interactive forecast visualization with Plotly.
+
+```python
+plot_forecast_interactive(
+    y_train: pd.Series,
+    y_test: pd.Series = None,
+    forecast: pd.Series = None,
+    lower: pd.Series = None,
+    upper: pd.Series = None,
+    title: str = 'Forecast'
+) -> plotly.graph_objects.Figure
+```
+
+Same parameters as `plot_forecast`, but returns a Plotly figure for interactive exploration.
+
+**Requires:** `pip install plotly`
+
+### plot_model_comparison
+
+Compare model performance with horizontal bar chart.
+
+```python
+plot_model_comparison(
+    results: Dict[str, float],
+    metric: str = 'RMSE',
+    title: str = 'Model Comparison'
+) -> matplotlib.figure.Figure
+```
+
+**Example:**
+```python
+from autotsforecast.visualization.plots import plot_model_comparison
+
+results = {'ARIMA': 12.5, 'XGBoost': 10.2, 'Prophet': 11.8}
+fig = plot_model_comparison(results, metric='RMSE')
+plt.show()
+```
+
+### plot_residuals
+
+Create residual diagnostic plots.
+
+```python
+plot_residuals(
+    actual: pd.Series,
+    predicted: pd.Series,
+    title: str = 'Residual Analysis'
+) -> matplotlib.figure.Figure
+```
+
+Returns a figure with:
+- Residual time series
+- Histogram
+- Q-Q plot
+
+---
+
+## Parallel Processing
+
+### ParallelForecaster
+
+Wrapper for parallel forecasting operations.
+
+**Parameters:**
+
+| Parameter | Type | Default | Allowed Values | Description |
+|-----------|------|---------|----------------|-------------|
+| `n_jobs` | int | `-1` | 1 to CPU count, -1 | Number of parallel jobs (-1 = all cores) |
+| `backend` | str | `'auto'` | `'auto'`, `'joblib'`, `'threads'` | Parallelization backend |
+| `verbose` | bool | `False` | `True`, `False` | Show progress information |
+
+**Methods:**
+
+```python
+parallel_series_fit(
+    model_factory: callable,
+    y: pd.DataFrame,
+    X: pd.DataFrame = None
+) -> Dict[str, Any]
+```
+Fit models for each series in parallel using a model factory.
+
+```python
+parallel_fit(models: list, y: pd.DataFrame, X: pd.DataFrame = None) -> list
+```
+Fit multiple different models in parallel.
+
+```python
+parallel_predict(models: list, X: pd.DataFrame = None) -> list
+```
+Generate predictions from multiple fitted models in parallel.
+
+**Example:**
+```python
+from autotsforecast.utils.parallel import ParallelForecaster
+from autotsforecast.models.external import RandomForestForecaster
+
+# Create parallel forecaster with 4 workers
+pf = ParallelForecaster(n_jobs=4, verbose=True)
+
+# Fit each series in parallel using model factory
+fitted_models = pf.parallel_series_fit(
+    model_factory=lambda: RandomForestForecaster(horizon=14, n_lags=7),
+    y=y_train,
+    X=X_train
+)
+```
+
+### parallel_map
+
+Generic parallel map function.
+
+```python
+parallel_map(
+    func: callable,
+    items: list,
+    n_jobs: int = -1,
+    verbose: bool = False
+) -> list
+```
+
+**Example:**
+```python
+from autotsforecast.utils.parallel import parallel_map
+
+def process_series(series_data):
+    model = RandomForestForecaster(horizon=14)
+    model.fit(series_data)
+    return model.predict()
+
+results = parallel_map(process_series, [y[col] for col in y.columns], n_jobs=4)
+```
+
+### get_optimal_n_jobs
+
+Determine optimal number of parallel jobs.
+
+```python
+get_optimal_n_jobs(n_items: int, requested_jobs: int = -1) -> int
+```
+
+Returns the optimal number of jobs based on available CPUs and workload.
+
+---
+
+## Progress Tracking
+
+### ProgressTracker
+
+Unified progress tracking with rich/tqdm fallback.
+
+**Parameters:**
+
+| Parameter | Type | Default | Allowed Values | Description |
+|-----------|------|---------|----------------|-------------|
+| `total` | int | required | ≥ 1 | Total number of items |
+| `description` | str | `''` | Any string | Progress bar description |
+| `disable` | bool | `False` | `True`, `False` | Disable progress display |
+
+**Usage as Context Manager:**
+```python
+from autotsforecast.visualization.progress import ProgressTracker
+
+with ProgressTracker(total=100, description="Processing") as pbar:
+    for i in range(100):
+        # Do work
+        pbar.update(1)
+```
+
+**Usage as Iterator:**
+```python
+for item in ProgressTracker.track(items, description="Processing"):
+    # Do work with item
+    pass
+```

@@ -8,6 +8,27 @@
 
 AutoTSForecast automatically finds the best forecasting model for each of your time series. No more guessing whether Prophet, ARIMA, or XGBoost works best — let the algorithm decide.
 
+## 🚀 Key Features
+
+| Feature | Description | Benefit |
+|---------|-------------|---------|
+| **Per-Series Model Selection** | Automatically pick the best model for *each* series | Different series, different patterns → optimal accuracy |
+| **Per-Series Covariates** 🆕 | Pass different features to different series | Products driven by different factors get custom features |
+| **Prediction Intervals** 🆕 | Conformal prediction with coverage guarantees | Quantify uncertainty without assumptions |
+| **Calendar Features** 🆕 | Auto-extract day-of-week, month, holidays | Handle seasonality automatically |
+| **Hierarchical Reconciliation** | Ensure forecasts add up (total = sum of parts) | Coherent forecasts across organizational levels |
+| **Parallel Processing** 🆕 | Fit many series simultaneously | Scale to thousands of series |
+| **Interpretability** | Sensitivity analysis & SHAP | Understand what drives your forecasts |
+
+## ✨ What's New in v0.3.3
+
+- **🎯 Per-Series Covariates** — Pass different features to different series via `X={series: df}`
+- **📊 Prediction Intervals** — Conformal prediction for uncertainty quantification
+- **📅 Calendar Features** — Automatic time-based feature extraction with cyclical encoding
+- **🖼️ Better Visualization** — Static (matplotlib) and interactive (Plotly) forecast plots
+- **⚡ Parallel Processing** — Speed up multi-series forecasting with joblib
+- **📈 Progress Tracking** — Rich progress bars for long-running operations
+
 ## Installation
 
 ### 🚀 Recommended: Install Everything
@@ -16,7 +37,7 @@ AutoTSForecast automatically finds the best forecasting model for each of your t
 pip install "autotsforecast[all]"
 ```
 
-This installs **all 9 models** plus visualization and interpretability tools.
+This installs **all 9 models** plus visualization, interpretability, and new features.
 
 ### Basic Install (Core Models Only)
 
@@ -51,7 +72,7 @@ pip install "autotsforecast[neural]"
 # Add SHAP (interpretability)
 pip install "autotsforecast[interpret]"
 
-# Add visualization tools
+# Add visualization tools (Plotly, progress bars)
 pip install "autotsforecast[viz]"
 ```
 
@@ -64,6 +85,7 @@ pip install "autotsforecast[viz]"
 | ProphetForecaster | ❌ | `pip install "autotsforecast[prophet]"` |
 | LSTMForecaster | ❌ | `pip install "autotsforecast[neural]"` |
 | SHAP Analysis | ❌ | `pip install "autotsforecast[interpret]"` |
+| Interactive Plots | ❌ | `pip install "autotsforecast[viz]"` |
 
 ## Quick Start
 
@@ -216,17 +238,74 @@ analyzer = DriverAnalyzer(model=fitted_model, feature_names=['temperature', 'pro
 importance = analyzer.calculate_feature_importance(X_test, y_test, method='sensitivity')
 ```
 
-## Documentation
+### 6. Prediction Intervals
 
-- [Quick Start Guide](QUICKSTART.md) — fastest overview
-- [API Reference](API_REFERENCE.md) — detailed parameter documentation
-- [Parameter Guide](PARAMETER_GUIDE.md) — model parameter recommendations
-- [Tutorial Notebook](examples/autotsforecast_tutorial.ipynb) — comprehensive examples
+Generate prediction intervals with conformal prediction:
+
+```python
+from autotsforecast.uncertainty.intervals import PredictionIntervals
+
+# After fitting a model
+pi = PredictionIntervals(method='conformal', coverage=[0.80, 0.95])
+pi.fit(model, y_train)
+intervals = pi.predict(forecasts)
+
+# Access intervals
+print(intervals['lower_95'], intervals['upper_95'])
+```
+
+### 7. Calendar Features
+
+Automatic time-based feature extraction:
+
+```python
+from autotsforecast.features.calendar import CalendarFeatures
+
+# Auto-detect features with cyclical encoding
+cal = CalendarFeatures(cyclical_encoding=True)
+features = cal.fit_transform(y_train)
+
+# Generate future features for forecasting
+future_features = cal.transform_future(horizon=30)
+```
+
+### 8. Visualization
+
+Create publication-ready plots:
+
+```python
+from autotsforecast.visualization.plots import plot_forecast, plot_forecast_interactive
+
+# Static matplotlib plot
+fig = plot_forecast(y_train, y_test, forecast, lower=lower_95, upper=upper_95)
+
+# Interactive Plotly plot
+fig = plot_forecast_interactive(y_train, y_test, forecast)
+fig.show()
+```
+
+### 9. Parallel Processing
+
+Speed up multi-series forecasting:
+
+```python
+from autotsforecast.utils.parallel import ParallelForecaster, parallel_map
+
+# Create parallel forecaster
+pf = ParallelForecaster(n_jobs=4)
+
+# Fit each series in parallel
+fitted_models = pf.parallel_series_fit(
+    model_factory=lambda: RandomForestForecaster(horizon=14),
+    y=y_train,
+    X=X_train
+)
+```
 
 ## Requirements
 
 - Python ≥ 3.8
-- Core: numpy, pandas, scikit-learn, statsmodels, scipy
+- Core: numpy, pandas, scikit-learn, statsmodels, scipy, joblib
 
 ## License
 

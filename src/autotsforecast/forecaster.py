@@ -10,6 +10,13 @@ from .models.base import BaseForecaster
 from .models.selection import ModelSelector
 from .backtesting.validator import BacktestValidator
 
+# Import progress tracking utilities
+try:
+    from .visualization.progress import ProgressTracker, progress_bar
+    PROGRESS_AVAILABLE = True
+except ImportError:
+    PROGRESS_AVAILABLE = False
+
 
 def get_default_candidate_models(horizon: int) -> List[BaseForecaster]:
     """Return a default pool of candidate models for `AutoForecaster`.
@@ -484,6 +491,95 @@ class AutoForecaster:
         
         return self.forecasts_
     
+    def forecast_with_intervals(
+        self,
+        y_train: pd.DataFrame,
+        X: Optional[Union[pd.DataFrame, Dict[str, pd.DataFrame]]] = None,
+        coverage: Union[float, List[float]] = 0.95,
+        method: str = 'conformal',
+        n_cal: Optional[int] = None
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        Generate forecasts with prediction intervals.
+        
+        This method provides uncertainty quantification for forecasts using
+        various interval estimation methods.
+        
+        Parameters
+        ----------
+        y_train : pd.DataFrame
+            Training data used for calibrating prediction intervals
+        X : pd.DataFrame or Dict[str, pd.DataFrame], optional
+            Future exogenous variables for forecasting
+        coverage : float or list of float, default=0.95
+            Target coverage probability (e.g., 0.95 for 95% intervals)
+            Can be a list for multiple intervals: [0.80, 0.95]
+        method : str, default='conformal'
+            Method for generating intervals:
+            - 'conformal': Conformal prediction (recommended, distribution-free)
+            - 'residual': Normal approximation from residuals
+            - 'empirical': Empirical quantiles from residuals
+        n_cal : int, optional
+            Size of calibration set. If None, uses min(len(y_train)//4, 100)
+            
+        Returns
+        -------
+        dict
+            Dictionary containing:
+            - 'point': Point forecasts (pd.DataFrame)
+            - 'lower_{coverage}': Lower bounds for each coverage level
+            - 'upper_{coverage}': Upper bounds for each coverage level
+            
+        Examples
+        --------
+        >>> auto = AutoForecaster(candidate_models=models)
+        >>> auto.fit(y_train)
+        >>> 
+        >>> # Get forecasts with 80% and 95% prediction intervals
+        >>> results = auto.forecast_with_intervals(
+        ...     y_train,
+        ...     coverage=[0.80, 0.95]
+        ... )
+        >>> 
+        >>> print(results['point'])      # Point forecasts
+        >>> print(results['lower_95'])   # Lower bound of 95% interval
+        >>> print(results['upper_95'])   # Upper bound of 95% interval
+        """
+        if not self.is_fitted:
+            raise ValueError("Forecaster must be fitted before forecasting. Call fit() first.")
+        
+        from .uncertainty.intervals import PredictionIntervals
+        
+        if self.verbose:
+            print("\n🔮 Generating forecasts with prediction intervals...")
+            print(f"   Method: {method}")
+            coverage_list = [coverage] if isinstance(coverage, (int, float)) else coverage
+            print(f"   Coverage levels: {[f'{c*100:.0f}%' for c in coverage_list]}")
+        
+        # Create prediction interval estimator
+        pi = PredictionIntervals(
+            method=method,
+            coverage=coverage
+        )
+        
+        # Fit on training data
+        if self.verbose:
+            print("   Calibrating intervals...")
+        pi.fit(self, y_train, X, n_cal=n_cal)
+        
+        # Generate point forecasts
+        forecasts = self.forecast(X)
+        
+        # Generate intervals
+        if self.verbose:
+            print("   Computing intervals...")
+        intervals = pi.predict(forecasts)
+        
+        if self.verbose:
+            print("✅ Forecasts with intervals generated!")
+        
+        return intervals
+
     def get_summary(self) -> Dict[str, Any]:
         """
         Get comprehensive summary of model selection and forecasting.
