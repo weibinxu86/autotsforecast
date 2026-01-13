@@ -1,6 +1,6 @@
 # Release Notes
 
-## v0.3.1 (January 2026)
+## v0.3.3 (January 2026)
 
 ### 🎯 Per-Series Covariates (NEW)
 
@@ -102,7 +102,7 @@ Rich progress bars for long-running operations (requires `rich` package):
 
 ---
 
-## v0.2.0 (December 2025)
+## v0.2.2 (December 2025)
 
 ### Features
 - Per-series model selection (`per_series_models=True`)
@@ -118,7 +118,7 @@ Rich progress bars for long-running operations (requires `rich` package):
 
 ---
 
-## v0.1.0 (November 2025)
+## v0.1.0 (November 2025, yanked)
 
 - Initial release
 - AutoForecaster with automatic model selection
