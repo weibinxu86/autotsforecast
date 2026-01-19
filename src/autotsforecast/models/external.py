@@ -46,6 +46,13 @@ def _import_torch():
     return torch, nn
 
 
+@lru_cache(maxsize=1)
+def _import_chronos():
+    from chronos import Chronos2Pipeline
+
+    return Chronos2Pipeline
+
+
 class RandomForestForecaster(BaseForecaster):
     """Random Forest forecaster with lag features and covariate support.
     
@@ -1048,3 +1055,214 @@ class LSTMForecaster(BaseForecaster):
         )
         
         return pd.DataFrame(forecast, index=future_dates, columns=self.feature_names)
+
+
+class Chronos2Forecaster(BaseForecaster):
+    """Chronos-2 foundation model forecaster from Amazon Science.
+    
+    Chronos-2 is a state-of-the-art pretrained time series foundation model that achieves
+    excellent zero-shot forecasting performance. It supports univariate, multivariate, and
+    covariate-informed forecasting.
+    
+    Key features:
+    - Zero-shot forecasting (no training required)
+    - Multiple model sizes (tiny, mini, small, base, bolt variants)
+    - Fast inference (especially bolt variants - up to 250x faster)
+    - State-of-the-art performance on fev-bench and GIFT-Eval
+    - Supports prediction intervals
+    
+    Model sizes:
+    - amazon/chronos-2: 120M params (default, best accuracy)
+    - autogluon/chronos-2-small: 28M params (smaller, still good)
+    - amazon/chronos-bolt-tiny: 9M params (ultra fast)
+    - amazon/chronos-bolt-mini: 21M params (fast)
+    - amazon/chronos-bolt-small: 48M params (balanced)
+    - amazon/chronos-bolt-base: 205M params (accurate + fast)
+    
+    Example:
+        >>> from autotsforecast.models.external import Chronos2Forecaster
+        >>> model = Chronos2Forecaster(horizon=24, model_name="amazon/chronos-2")
+        >>> model.fit(y_train)
+        >>> forecasts = model.predict()
+    """
+    
+    supports_covariates: bool = False  # Currently univariate only in our wrapper
+    
+    def __init__(
+        self,
+        horizon: int,
+        model_name: str = "amazon/chronos-2",
+        device_map: str = "auto",
+        dtype: str = "auto",
+        quantile_levels: Optional[List[float]] = None,
+    ):
+        """Initialize Chronos-2 forecaster.
+        
+        Parameters
+        ----------
+        horizon : int
+            Number of time steps to forecast into the future.
+        model_name : str, default="amazon/chronos-2"
+            Pretrained model name. Options:
+            - "amazon/chronos-2" (120M, best accuracy)
+            - "autogluon/chronos-2-small" (28M, good accuracy)
+            - "amazon/chronos-bolt-tiny" (9M, ultra fast)
+            - "amazon/chronos-bolt-mini" (21M, fast)
+            - "amazon/chronos-bolt-small" (48M, balanced)
+            - "amazon/chronos-bolt-base" (205M, accurate + fast)
+        device_map : str, default="auto"
+            Device mapping strategy. "auto" will use GPU if available, else CPU.
+            Can also specify "cuda" or "cpu" explicitly.
+        dtype : str, default="auto"
+            PyTorch dtype for model weights. "auto" will choose automatically.
+        quantile_levels : list of float, optional
+            Quantile levels for prediction intervals (e.g., [0.1, 0.5, 0.9]).
+            If None, only point forecasts are returned.
+        """
+        super().__init__(horizon=horizon)
+        self.model_name = model_name
+        self.device_map = device_map
+        self.dtype = dtype
+        self.quantile_levels = quantile_levels or [0.5]  # Default to median
+        self._pipeline = None
+        self.feature_names = None
+        self.last_index = None
+    
+    @property
+    def _chronos(self):
+        """Lazy import and cache Chronos pipeline"""
+        if self._pipeline is None:
+            Chronos2Pipeline = _import_chronos()
+            self._pipeline = Chronos2Pipeline.from_pretrained(
+                self.model_name,
+                device_map=self.device_map,
+                dtype=self.dtype,
+            )
+        return self._pipeline
+    
+    def fit(self, y: Union[pd.Series, pd.DataFrame], X: Optional[pd.DataFrame] = None) -> "Chronos2Forecaster":
+        """Fit the Chronos-2 model (stores context for zero-shot inference).
+        
+        Note: Chronos-2 is a pretrained model, so "fitting" just means storing
+        the historical data as context for zero-shot forecasting.
+        
+        Parameters
+        ----------
+        y : pd.Series or pd.DataFrame
+            Historical time series data. If DataFrame, will forecast all columns.
+        X : pd.DataFrame, optional
+            Covariates (currently not used in this wrapper).
+        
+        Returns
+        -------
+        self : Chronos2Forecaster
+            Fitted forecaster instance.
+        """
+        if isinstance(y, pd.Series):
+            y = y.to_frame()
+        
+        self.feature_names = y.columns.tolist()
+        self.y_train = y
+        self.last_index = y.index[-1]
+        self.is_fitted = True
+        return self
+    
+    def predict(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        """Generate forecasts using Chronos-2.
+        
+        Parameters
+        ----------
+        X : pd.DataFrame, optional
+            Future covariates (currently not used in this wrapper).
+        
+        Returns
+        -------
+        pd.DataFrame
+            Forecasts with datetime index. If quantile_levels specified,
+            returns median forecast only. For full quantiles, use predict_quantiles().
+        """
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before prediction")
+        
+        # Convert to list of series for Chronos API
+        context_list = [self.y_train[col].values for col in self.feature_names]
+        
+        # Generate forecasts using correct API
+        # Returns list of tensors, shape per tensor: (batch=1, num_quantiles=13, prediction_length)
+        forecast_list = self._chronos.predict(
+            inputs=context_list,
+            prediction_length=self.horizon,
+        )
+        
+        # Extract median (quantile index 6 out of 13)
+        # Convert to array: (n_series, horizon)
+        forecasts = np.array([f[0, 6, :].numpy() for f in forecast_list]).T  # Shape: (horizon, n_series)
+        
+        # Create future dates
+        freq = pd.infer_freq(self.y_train.index[-10:])
+        if freq is None:
+            freq = 'D'
+        
+        future_dates = pd.date_range(
+            start=self.last_index + pd.tseries.frequencies.to_offset(freq),
+            periods=self.horizon,
+            freq=freq
+        )
+        
+        return pd.DataFrame(forecasts, index=future_dates, columns=self.feature_names)
+    
+    def predict_quantiles(self, quantile_levels: Optional[List[float]] = None) -> pd.DataFrame:
+        """Generate probabilistic forecasts with multiple quantiles.
+        
+        Parameters
+        ----------
+        quantile_levels : list of float, optional
+            Quantile levels to return (e.g., [0.1, 0.5, 0.9]).
+            If None, uses quantile_levels from __init__.
+        
+        Returns
+        -------
+        pd.DataFrame
+            Multi-level DataFrame with columns for each series and quantile.
+        """
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before prediction")
+        
+        quantiles_requested = quantile_levels or self.quantile_levels
+        
+        # Convert to list of series for Chronos API
+        context_list = [self.y_train[col].values for col in self.feature_names]
+        
+        # Generate forecasts - model returns 13 quantiles by default
+        # Quantile levels: [0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99]
+        default_quantiles = [0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]
+        
+        forecast_list = self._chronos.predict(
+            inputs=context_list,
+            prediction_length=self.horizon,
+        )
+        
+        # Extract requested quantiles
+        # forecast shape: (batch=1, num_quantiles=13, prediction_length)
+        results = {}
+        for i, col in enumerate(self.feature_names):
+            forecast_tensor = forecast_list[i][0]  # Shape: (13, horizon)
+            for q in quantiles_requested:
+                # Find closest quantile in default set
+                closest_idx = min(range(len(default_quantiles)), 
+                                 key=lambda idx: abs(default_quantiles[idx] - q))
+                q_forecast = forecast_tensor[closest_idx, :].numpy()
+                results[f"{col}_q{int(q*100)}"] = q_forecast
+        
+        # Create future dates
+        freq = pd.infer_freq(self.y_train.index[-10:])
+        if freq is None:
+            freq = 'D'
+        
+        future_dates = pd.date_range(
+            start=self.last_index + pd.tseries.frequencies.to_offset(freq),
+            periods=self.horizon,
+            freq=freq
+        )
+        
+        return pd.DataFrame(results, index=future_dates)

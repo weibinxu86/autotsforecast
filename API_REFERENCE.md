@@ -455,6 +455,83 @@ LSTMForecaster(
 
 ---
 
+### Chronos2Forecaster
+
+**State-of-the-art pretrained foundation model** from Amazon Science for zero-shot time series forecasting.
+
+**Key Features:**
+- Zero-shot forecasting (no training required)
+- Multiple model sizes (9M to 710M parameters)
+- Bolt variants: up to 250x faster than original
+- State-of-the-art performance on fev-bench and GIFT-Eval
+- Supports probabilistic forecasting with quantiles
+
+**Parameters:**
+
+| Parameter | Type | Default | Allowed Values | Description |
+|-----------|------|---------|----------------|-------------|
+| `horizon` | int | required | ≥ 1 | Number of steps to forecast |
+| `model_name` | str | `"amazon/chronos-2"` | See model sizes below | Pretrained model to use |
+| `device_map` | str | `"auto"` | `"auto"`, `"cuda"`, `"cpu"` | Device mapping (auto uses GPU if available) |
+| `torch_dtype` | str | `"auto"` | `"auto"`, `"float32"`, `"float16"` | PyTorch dtype for model weights |
+| `quantile_levels` | list[float] | `None` | [0.0-1.0] | Quantile levels for prediction intervals |
+
+**Available Model Sizes:**
+
+| Model Name | Parameters | Speed | Best For |
+|------------|-----------|-------|----------|
+| `"amazon/chronos-2"` | 120M | ⭐⭐ | Best accuracy (default) |
+| `"autogluon/chronos-2-small"` | 28M | ⭐⭐⭐ | Good balance |
+| `"amazon/chronos-bolt-tiny"` | 9M | ⭐⭐⭐⭐ | Ultra fast, resource-constrained |
+| `"amazon/chronos-bolt-mini"` | 21M | ⭐⭐⭐⭐ | Fast inference |
+| `"amazon/chronos-bolt-small"` | 48M | ⭐⭐⭐ | Balanced speed/accuracy |
+| `"amazon/chronos-bolt-base"` | 205M | ⭐⭐ | High accuracy + fast |
+
+**Covariate Support:** Not in current wrapper (univariate only)
+
+**Methods:**
+
+```python
+predict(X=None) -> pd.DataFrame
+```
+Returns median forecasts (quantile 0.5).
+
+```python
+predict_quantiles(quantile_levels=[0.1, 0.5, 0.9]) -> pd.DataFrame
+```
+Returns probabilistic forecasts with multiple quantiles for uncertainty quantification.
+
+**Example:**
+
+```python
+from autotsforecast.models.external import Chronos2Forecaster
+
+# Default: Best accuracy
+model = Chronos2Forecaster(horizon=24, model_name="amazon/chronos-2")
+model.fit(y_train)  # Just stores context, no training!
+forecasts = model.predict()
+
+# Fast variant for production
+model_fast = Chronos2Forecaster(
+    horizon=24, 
+    model_name="amazon/chronos-bolt-small",
+    device_map="cuda"  # Use GPU
+)
+model_fast.fit(y_train)
+forecasts = model_fast.predict()
+
+# Probabilistic forecasts
+quantile_forecasts = model.predict_quantiles(quantile_levels=[0.1, 0.5, 0.9])
+# Returns columns: series_q10, series_q50, series_q90
+```
+
+**Installation:**
+```bash
+pip install "autotsforecast[chronos]"
+```
+
+---
+
 ## Hierarchical Reconciliation
 
 ### HierarchicalReconciler

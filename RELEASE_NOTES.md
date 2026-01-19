@@ -1,8 +1,49 @@
 # Release Notes
 
+## v0.3.4 (January 2026)
+
+### 🚀 Chronos-2 Foundation Model (NEW)
+
+**Major new feature**: Integration with Amazon's **Chronos-2** state-of-the-art foundation model for zero-shot time series forecasting.
+
+```python
+from autotsforecast.models.external import Chronos2Forecaster
+
+# Use pre-trained foundation model - no training required!
+model = Chronos2Forecaster(model_name='autogluon/chronos-2-small', horizon=10)
+model.fit(y_train)  # Just stores context
+forecasts = model.predict()  # Zero-shot forecasting
+```
+
+**Why Chronos-2?**
+- 🎯 **Zero-shot learning**: Pre-trained on 100+ billion tokens of time series data
+- 🌍 **Domain agnostic**: Works across retail, finance, weather, energy, etc. without retraining
+- 📊 **Multiple model sizes**: Choose from 6 models (9M to 710M parameters) based on your accuracy/speed tradeoff
+- 🔮 **Probabilistic forecasts**: Get full prediction distributions, not just point forecasts
+- 🏆 **SOTA performance**: Achieves state-of-the-art results on multiple benchmarks
+
+**Available Models:**
+| Model | Parameters | Best For |
+|-------|-----------|----------|
+| `chronos-bolt-tiny` | 9M | Fastest inference |
+| `chronos-bolt-mini` | 21M | Speed/accuracy balance |
+| `autogluon/chronos-2-small` | 28M | **Recommended** |
+| `chronos-bolt-small` | 47M | Higher accuracy |
+| `amazon/chronos-2` | 120M | Best quality |
+| `chronos-bolt-base` | 205M | Production systems |
+
+**Installation:**
+```bash
+pip install autotsforecast[chronos]
+```
+
+**Documentation:** See [README Section 7](README.md#7-chronos-2-foundation-model-support-new) for complete examples and model comparison.
+
+---
+
 ## v0.3.3 (January 2026)
 
-### 🎯 Per-Series Covariates (NEW)
+### 🎯 Per-Series Covariates
 
 The headline feature of this release: **pass different covariates to different series**.
 

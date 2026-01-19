@@ -4,14 +4,15 @@
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyPI](https://img.shields.io/pypi/v/autotsforecast?cacheSeconds=3600)](https://pypi.org/project/autotsforecast/)
+[![PyPI](https://img.shields.io/pypi/v/autotsforecast)](https://pypi.org/project/autotsforecast/)
 
-AutoTSForecast automatically finds the best forecasting model for each of your time series. No more guessing whether Prophet, ARIMA, or XGBoost works best — let the algorithm decide.
+AutoTSForecast automatically finds the best forecasting model for each of your time series. No more guessing whether Prophet, ARIMA, XGBoost, or **Chronos-2 foundation model** works best — let the algorithm decide. **New: Zero-shot forecasting with Chronos-2 — no training required, just pass your data and get state-of-the-art predictions!**
 
 ## 🚀 Key Features
 
 | Feature | Description | Benefit |
 |---------|-------------|---------|
+| **Chronos-2 Foundation Model** 🆕 | Zero-shot forecasting with pre-trained models (9M-710M params) | **No training needed** — just pass your data! |
 | **Per-Series Model Selection** | Automatically pick the best model for *each* series | Different series, different patterns → optimal accuracy |
 | **Per-Series Covariates** 🆕 | Pass different features to different series | Products driven by different factors get custom features |
 | **Prediction Intervals** 🆕 | Conformal prediction with coverage guarantees | Quantify uncertainty without assumptions |
@@ -20,8 +21,9 @@ AutoTSForecast automatically finds the best forecasting model for each of your t
 | **Parallel Processing** 🆕 | Fit many series simultaneously | Scale to thousands of series |
 | **Interpretability** | Sensitivity analysis & SHAP | Understand what drives your forecasts |
 
-## ✨ What's New in v0.3.3
+## ✨ What's New in v0.3.8+
 
+- **🚀 Chronos-2 Foundation Model** — Zero-shot forecasting with state-of-the-art pre-trained models (no training needed!)
 - **🎯 Per-Series Covariates** — Pass different features to different series via `X={series: df}`
 - **📊 Prediction Intervals** — Conformal prediction for uncertainty quantification
 - **📅 Calendar Features** — Automatic time-based feature extraction with cyclical encoding
@@ -37,7 +39,7 @@ AutoTSForecast automatically finds the best forecasting model for each of your t
 pip install "autotsforecast[all]"
 ```
 
-This installs **all 9 models** plus visualization, interpretability, and new features.
+This installs **all 10 models** plus visualization, interpretability, and new features.
 
 ### Basic Install (Core Models Only)
 
@@ -69,6 +71,9 @@ pip install "autotsforecast[prophet]"
 # Add LSTM (deep learning)
 pip install "autotsforecast[neural]"
 
+# Add Chronos-2 (foundation model - state-of-the-art zero-shot forecasting)
+pip install "autotsforecast[chronos]"
+
 # Add SHAP (interpretability)
 pip install "autotsforecast[interpret]"
 
@@ -84,6 +89,7 @@ pip install "autotsforecast[viz]"
 | XGBoostForecaster | ❌ | `pip install "autotsforecast[ml]"` |
 | ProphetForecaster | ❌ | `pip install "autotsforecast[prophet]"` |
 | LSTMForecaster | ❌ | `pip install "autotsforecast[neural]"` |
+| Chronos2Forecaster | ❌ | `pip install "autotsforecast[chronos]"` |
 | SHAP Analysis | ❌ | `pip install "autotsforecast[interpret]"` |
 | Interactive Plots | ❌ | `pip install "autotsforecast[viz]"` |
 
@@ -94,17 +100,18 @@ pip install "autotsforecast[viz]"
 ```python
 from autotsforecast import AutoForecaster
 from autotsforecast.models.base import MovingAverageForecaster
-from autotsforecast.models.external import ARIMAForecaster, ProphetForecaster, RandomForestForecaster
+from autotsforecast.models.external import ARIMAForecaster, ProphetForecaster, RandomForestForecaster, Chronos2Forecaster
 
 # Your time series data (pandas DataFrame)
 # y = pd.DataFrame({'series_a': [...], 'series_b': [...]})
 
-# Define candidate models
+# Define candidate models (including Chronos-2 foundation model)
 candidates = [
     ARIMAForecaster(horizon=14),
     ProphetForecaster(horizon=14),
     RandomForestForecaster(horizon=14, n_lags=7),
     MovingAverageForecaster(horizon=14, window=7),
+    Chronos2Forecaster(horizon=14, model_name='autogluon/chronos-2-small'),  # Zero-shot foundation model
 ]
 
 # AutoForecaster picks the best model across all series (default)
@@ -113,7 +120,7 @@ auto.fit(y_train)
 forecasts = auto.forecast()
 
 # See which model was selected
-print(auto.best_model_name_)  # e.g., 'ProphetForecaster'
+print(auto.best_model_name_)  # e.g., 'Chronos2Forecaster'
 
 # OR: Pick the best model for EACH series separately
 auto = AutoForecaster(candidate_models=candidates, metric='rmse', per_series_models=True)
@@ -121,7 +128,7 @@ auto.fit(y_train)
 forecasts = auto.forecast()
 
 # See which models were selected per series
-print(auto.best_model_names_)  # e.g., {'series_a': 'ProphetForecaster', 'series_b': 'ARIMAForecaster'}
+print(auto.best_model_names_)  # e.g., {'series_a': 'Chronos2Forecaster', 'series_b': 'ARIMAForecaster'}
 ```
 
 ### 2. Using Covariates (External Features)
@@ -137,7 +144,22 @@ forecasts = model.predict(X=X_test)
 
 **Models supporting covariates:** Prophet, XGBoost, RandomForest, Linear
 
-### 2.1 Per-Series Covariates — Different Features for Each Series
+### 2.1 Calendar Features
+
+Automatic time-based feature extraction:
+
+```python
+from autotsforecast.features.calendar import CalendarFeatures
+
+# Auto-detect features with cyclical encoding
+cal = CalendarFeatures(cyclical_encoding=True)
+features = cal.fit_transform(y_train)
+
+# Generate future features for forecasting
+future_features = cal.transform_future(horizon=30)
+```
+
+### 2.2 Per-Series Covariates — Different Features for Each Series
 
 **Use Case:** When different time series are driven by different external factors.
 
@@ -254,20 +276,42 @@ intervals = pi.predict(forecasts)
 print(intervals['lower_95'], intervals['upper_95'])
 ```
 
-### 7. Calendar Features
+### 7. Chronos-2 Foundation Model (Zero-Shot Forecasting)
 
-Automatic time-based feature extraction:
+State-of-the-art pretrained model - **no training needed!**
 
 ```python
-from autotsforecast.features.calendar import CalendarFeatures
+from autotsforecast.models.external import Chronos2Forecaster
 
-# Auto-detect features with cyclical encoding
-cal = CalendarFeatures(cyclical_encoding=True)
-features = cal.fit_transform(y_train)
+# Initialize with default model (120M params, best accuracy)
+model = Chronos2Forecaster(
+    horizon=30,
+    model_name="amazon/chronos-2"  # or "autogluon/chronos-2-small" for faster inference
+)
 
-# Generate future features for forecasting
-future_features = cal.transform_future(horizon=30)
+# Fit (just stores context, no training!)
+model.fit(y_train)
+
+# Generate point forecasts (median)
+forecasts = model.predict()
+
+# Generate probabilistic forecasts with uncertainty quantification
+quantile_forecasts = model.predict_quantiles(quantile_levels=[0.1, 0.5, 0.9])
+# Returns: value_q10, value_q50, value_q90 columns
 ```
+
+**Available Model Sizes:**
+- `amazon/chronos-2` - 120M params (best accuracy)
+- `autogluon/chronos-2-small` - 28M params (balanced, **tested: 0.63% MAPE**)
+- `amazon/chronos-bolt-tiny` - 9M params (ultra fast)
+- `amazon/chronos-bolt-small` - 48M params (balanced speed/accuracy)
+- `amazon/chronos-bolt-base` - 205M params (high accuracy + fast)
+
+**Why Chronos-2?**
+- ✅ Zero-shot: No training required
+- ✅ State-of-the-art accuracy on multiple benchmarks
+- ✅ Built-in uncertainty quantification
+- ✅ Multiple model sizes for different use cases
 
 ### 8. Visualization
 

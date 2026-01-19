@@ -17,6 +17,7 @@ __version__ = "0.3.3"
 from autotsforecast.models.base import BaseForecaster, VARForecaster, LinearForecaster, MovingAverageForecaster
 from autotsforecast.models.selection import ModelSelector
 from autotsforecast.models.external import (
+    Chronos2Forecaster,
     RandomForestForecaster,
     XGBoostForecaster,
     ProphetForecaster,
@@ -65,6 +66,7 @@ __all__ = [
     "ARIMAForecaster",
     "ETSForecaster",
     "LSTMForecaster",
+    "Chronos2Forecaster",
     # Core Components
     "ModelSelector",
     "BacktestValidator",

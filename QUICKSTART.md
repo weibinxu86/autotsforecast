@@ -128,6 +128,39 @@ analyzer = DriverAnalyzer(model, feature_names=['temp', 'promo'])
 importance = analyzer.calculate_feature_importance(X_test, y_test, method='sensitivity')
 ```
 
+## 11. Chronos-2 Foundation Model (Zero-Shot Forecasting)
+
+**State-of-the-art pretrained model** — no training needed!
+
+```python
+from autotsforecast.models.external import Chronos2Forecaster
+
+# Default: amazon/chronos-2 (120M params, best accuracy)
+model = Chronos2Forecaster(horizon=24, model_name="amazon/chronos-2")
+model.fit(y_train)  # Just stores context, no training!
+forecasts = model.predict()
+
+# Fast variant: Chronos-Bolt (up to 250x faster)
+model_fast = Chronos2Forecaster(horizon=24, model_name="amazon/chronos-bolt-small")
+model_fast.fit(y_train)
+forecasts_fast = model_fast.predict()
+
+# Probabilistic forecasts with quantiles
+quantile_forecasts = model.predict_quantiles(quantile_levels=[0.1, 0.5, 0.9])
+```
+
+**Available Model Sizes:**
+- `"amazon/chronos-2"` — 120M params (best accuracy)
+- `"autogluon/chronos-2-small"` — 28M params (good balance)
+- `"amazon/chronos-bolt-tiny"` — 9M params (ultra fast)
+- `"amazon/chronos-bolt-small"` — 48M params (balanced)
+- `"amazon/chronos-bolt-base"` — 205M params (accurate + fast)
+
+**Installation:**
+```bash
+pip install "autotsforecast[chronos]"
+```
+
 ## Model Comparison
 
 | Model | Covariates | Speed | Best For |
@@ -137,6 +170,8 @@ importance = analyzer.calculate_feature_importance(X_test, y_test, method='sensi
 | RandomForest | ✅ | ⭐⭐ | General purpose |
 | XGBoost | ✅ | ⭐⭐ | High accuracy |
 | Prophet | ✅ | ⭐⭐ | Seasonality + holidays |
+| LSTM | ✅ | ⭐ | Deep learning |
+| **Chronos-2** | ❌ | ⭐⭐⭐ | **Zero-shot state-of-the-art** |
 
 ## Common Parameters
 

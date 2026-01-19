@@ -9,6 +9,7 @@ from autotsforecast.models.external import (
     ARIMAForecaster,
     ETSForecaster,
     LSTMForecaster,
+    Chronos2Forecaster,
 )
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     "ARIMAForecaster",
     "ETSForecaster",
     "LSTMForecaster",
+    "Chronos2Forecaster",
     "ModelSelector",
 ]
