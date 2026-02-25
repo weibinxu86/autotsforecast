@@ -60,7 +60,54 @@ def test_autoforecaster_get_summary_per_series(sample_data):
     auto.forecast()
     summary = auto.get_summary()
     assert summary['best_model'] == 'per-series'
+    assert summary['best_score'] is None
+    assert 'best_model_names' in summary
+    assert set(summary['best_model_names'].keys()) == set(sample_data.columns)
     assert 'forecast_summary' in summary
+
+
+def test_autoforecaster_print_summary_per_series(sample_data):
+    """print_summary() must not raise TypeError in per-series mode (regression test)."""
+    candidates = [
+        MovingAverageForecaster(horizon=2, window=5),
+        ETSForecaster(horizon=2, trend='add', seasonal=None),
+    ]
+    auto = AutoForecaster(
+        candidate_models=candidates,
+        metric='rmse',
+        n_splits=2,
+        test_size=10,
+        verbose=False,
+        per_series_models=True,
+        n_jobs=1,
+    )
+    auto.fit(sample_data)
+    auto.forecast()
+    # Must complete without raising any exception
+    auto.print_summary()
+
+
+def test_autoforecaster_print_summary_normal(sample_data):
+    """print_summary() must continue to work in normal (non-per-series) mode."""
+    candidates = [
+        MovingAverageForecaster(horizon=2, window=5),
+        ETSForecaster(horizon=2, trend='add', seasonal=None),
+    ]
+    auto = AutoForecaster(
+        candidate_models=candidates,
+        metric='rmse',
+        n_splits=2,
+        test_size=10,
+        verbose=False,
+    )
+    auto.fit(sample_data)
+    auto.forecast()
+    # Must complete without raising any exception
+    auto.print_summary()
+    # Normal-mode summary must NOT have per-series keys
+    summary = auto.get_summary()
+    assert 'best_model_names' not in summary
+    assert summary['best_score'] is not None
 
 
 def test_autoforecaster_per_series_models_runs(sample_data, sample_covariates):

@@ -638,6 +638,8 @@ class AutoForecaster:
                     }
                     for model_name, r in series_results.items()
                 }
+            if self.best_model_names_:
+                summary['best_model_names'] = dict(self.best_model_names_)
         else:
             for model_name, results in self.cv_results_.items():
                 summary['all_results'][model_name] = {
@@ -671,27 +673,39 @@ class AutoForecaster:
         print("="*80)
         
         print(f"\n🏆 Best Model: {summary['best_model']}")
-        print(f"   {summary['selection_metric'].upper()}: {summary['best_score']:.4f}")
+        if summary['best_score'] is not None:
+            print(f"   {summary['selection_metric'].upper()}: {summary['best_score']:.4f}")
+        else:
+            print(f"   (per-series model selection — one model chosen per variable)")
         
         print(f"\n📊 Backtesting Configuration:")
         print(f"   Splits: {summary['backtesting_config']['n_splits']}")
         print(f"   Test size: {summary['backtesting_config']['test_size']}")
         print(f"   Window: {summary['backtesting_config']['window_type']}")
         
-        print(f"\n📈 All Models Performance:")
-        print(f"{'Model':<40} {'RMSE':<12} {'MAE':<12} {'R²':<12}")
-        print("-" * 80)
-        
-        # Sort by metric
-        sorted_models = sorted(
-            summary['all_results'].items(),
-            key=lambda x: x[1][summary['selection_metric']],
-            reverse=(summary['selection_metric'] == 'r2')
-        )
-        
-        for model_name, metrics in sorted_models:
-            marker = "🏆" if model_name == summary['best_model'] else "  "
-            print(f"{marker} {model_name:<38} {metrics['rmse']:>10.4f}  {metrics['mae']:>10.4f}  {metrics['r2']:>10.4f}")
+        if 'best_model_names' in summary:
+            # Per-series mode: show a per-variable best-model table
+            print(f"\n📈 Per-Series Best Models:")
+            print(f"  {'Variable':<30} {'Best Model'}")
+            print("  " + "-" * 60)
+            for var, model_name in summary['best_model_names'].items():
+                print(f"  {var:<30} {model_name}")
+        else:
+            # Normal mode: show full model-comparison table
+            print(f"\n📈 All Models Performance:")
+            print(f"{'Model':<40} {'RMSE':<12} {'MAE':<12} {'R²':<12}")
+            print("-" * 80)
+            
+            # Sort by metric
+            sorted_models = sorted(
+                summary['all_results'].items(),
+                key=lambda x: x[1][summary['selection_metric']],
+                reverse=(summary['selection_metric'] == 'r2')
+            )
+            
+            for model_name, metrics in sorted_models:
+                marker = "🏆" if model_name == summary['best_model'] else "  "
+                print(f"{marker} {model_name:<38} {metrics['rmse']:>10.4f}  {metrics['mae']:>10.4f}  {metrics['r2']:>10.4f}")
         
         if 'forecast_summary' in summary:
             print(f"\n🔮 Forecast Summary:")
