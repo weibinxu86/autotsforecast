@@ -28,6 +28,41 @@ def test_default_candidate_pool_lstm_optional():
     assert 'LSTMForecaster' in names or 'LSTMForecaster' not in names
 
 
+def test_default_candidate_pool_optional_ml_models():
+    """RandomForest and XGBoost should be skipped gracefully if not installed."""
+    candidates = get_default_candidate_models(horizon=2)
+    # The pool must always contain at least the always-available models
+    names = [m.__class__.__name__ for m in candidates]
+    assert 'MovingAverageForecaster' in names
+    assert 'VARForecaster' in names
+    assert 'ETSForecaster' in names
+    # ML models are optional – their presence depends on installed packages
+    # but calling get_default_candidate_models() must never raise ImportError
+    assert len(candidates) >= 4
+
+
+def test_autoforecaster_get_summary_per_series(sample_data):
+    """get_summary() must not raise a KeyError in per-series mode."""
+    candidates = [
+        MovingAverageForecaster(horizon=2, window=5),
+        ETSForecaster(horizon=2, trend='add', seasonal=None),
+    ]
+    auto = AutoForecaster(
+        candidate_models=candidates,
+        metric='rmse',
+        n_splits=2,
+        test_size=10,
+        verbose=False,
+        per_series_models=True,
+        n_jobs=1,
+    )
+    auto.fit(sample_data)
+    auto.forecast()
+    summary = auto.get_summary()
+    assert summary['best_model'] == 'per-series'
+    assert 'forecast_summary' in summary
+
+
 def test_autoforecaster_per_series_models_runs(sample_data, sample_covariates):
     candidates = [
         MovingAverageForecaster(horizon=2, window=5),

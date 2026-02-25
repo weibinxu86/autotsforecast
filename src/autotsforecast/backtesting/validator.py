@@ -263,9 +263,12 @@ class BacktestValidator:
         mape = np.mean(np.abs((y_true - y_pred) / (y_true + epsilon))) * 100
         metrics['mape'] = float(mape.mean() if isinstance(mape, pd.Series) else mape)
         
+        # MSE (Mean Squared Error)
+        mse = np.mean((y_true - y_pred) ** 2)
+        metrics['mse'] = float(mse.mean() if isinstance(mse, pd.Series) else mse)
+
         # RMSE (Root Mean Squared Error)
-        rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
-        metrics['rmse'] = float(rmse.mean() if isinstance(rmse, pd.Series) else rmse)
+        metrics['rmse'] = float(np.sqrt(metrics['mse']))
         
         # MAE (Mean Absolute Error)
         mae = np.mean(np.abs(y_true - y_pred))

@@ -27,6 +27,22 @@ class TestBacktestValidator(unittest.TestCase):
         for key in ["rmse", "mae", "mape", "smape", "r2"]:
             self.assertIn(key, metrics)
 
+    def test_run_returns_mse(self):
+        """MSE must be present so that validate_results() works correctly."""
+        metrics = self.validator.run(self.y)
+        self.assertIn("mse", metrics)
+        self.assertGreaterEqual(metrics["mse"], 0)
+
+    def test_validate_results_returns_true_for_valid_metrics(self):
+        """validate_results() should return True when given a valid metrics dict."""
+        metrics = self.validator.run(self.y)
+        self.assertTrue(self.validator.validate_results(metrics))
+
+    def test_validate_results_returns_false_for_invalid_metrics(self):
+        """validate_results() should return False for negative or missing metrics."""
+        self.assertFalse(self.validator.validate_results({"mse": -1, "mae": 0.5}))
+        self.assertFalse(self.validator.validate_results({"mae": 0.5}))  # mse missing
+
 
 if __name__ == "__main__":
     unittest.main()

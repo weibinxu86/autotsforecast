@@ -36,11 +36,20 @@ def get_default_candidate_models(horizon: int) -> List[BaseForecaster]:
         MovingAverageForecaster(horizon=horizon, window=7),
         VARForecaster(horizon=horizon, lags=1),
         VARForecaster(horizon=horizon, lags=2),
-        RandomForestForecaster(horizon=horizon, n_lags=7, n_estimators=100, random_state=42),
-        XGBoostForecaster(horizon=horizon, n_lags=7, n_estimators=100, random_state=42),
         LinearForecaster(horizon=horizon),
         ETSForecaster(horizon=horizon, trend='add', seasonal=None),
     ]
+
+    # Optional ML models (require scikit-learn / xgboost)
+    try:
+        candidates.append(RandomForestForecaster(horizon=horizon, n_lags=7, n_estimators=100, random_state=42))
+    except ImportError:
+        pass
+
+    try:
+        candidates.append(XGBoostForecaster(horizon=horizon, n_lags=7, n_estimators=100, random_state=42))
+    except ImportError:
+        pass
 
     # Optional deep learning model
     try:
@@ -595,10 +604,18 @@ class AutoForecaster:
         """
         if not self.is_fitted:
             raise ValueError("Forecaster must be fitted before getting summary.")
-        
+
+        # Determine best score for the summary
+        if self.per_series_models:
+            best_score = None
+        elif self.best_model_name_ in self.cv_results_:
+            best_score = self.cv_results_[self.best_model_name_][self.metric]
+        else:
+            best_score = None
+
         summary = {
             'best_model': self.best_model_name_,
-            'best_score': self.cv_results_[self.best_model_name_][self.metric],
+            'best_score': best_score,
             'selection_metric': self.metric,
             'backtesting_config': {
                 'n_splits': self.n_splits,
@@ -607,16 +624,29 @@ class AutoForecaster:
             },
             'all_results': {}
         }
-        
+
         # Add results for all models
-        for model_name, results in self.cv_results_.items():
-            summary['all_results'][model_name] = {
-                'rmse': results['rmse'],
-                'mae': results['mae'],
-                'r2': results['r2'],
-                'mape': results.get('mape', None),
-                'smape': results.get('smape', None)
-            }
+        if self.per_series_models and self.cv_results_by_series_:
+            for series_name, series_results in self.cv_results_by_series_.items():
+                summary['all_results'][series_name] = {
+                    model_name: {
+                        'rmse': r['rmse'],
+                        'mae': r['mae'],
+                        'r2': r['r2'],
+                        'mape': r.get('mape', None),
+                        'smape': r.get('smape', None),
+                    }
+                    for model_name, r in series_results.items()
+                }
+        else:
+            for model_name, results in self.cv_results_.items():
+                summary['all_results'][model_name] = {
+                    'rmse': results['rmse'],
+                    'mae': results['mae'],
+                    'r2': results['r2'],
+                    'mape': results.get('mape', None),
+                    'smape': results.get('smape', None)
+                }
         
         # Add forecast summary if available
         if self.forecasts_ is not None:
