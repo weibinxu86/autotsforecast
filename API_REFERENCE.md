@@ -1,6 +1,6 @@
 # API Reference
 
-Complete parameter documentation for all models and classes in AutoTSForecast v0.3.1.
+Complete parameter documentation for all models and classes in AutoTSForecast v0.4.0.
 
 ## Table of Contents
 - [AutoForecaster](#autoforecaster)
@@ -228,7 +228,9 @@ Vector Autoregression for multivariate time series.
 | `lags` | int | `1` | 1-21 | Number of lag terms |
 | `trend` | str | `'c'` | `'c'`, `'ct'`, `'ctt'`, `'n'` | Trend type: constant, constant+trend, constant+trend+trend², none |
 
-**Covariate Support:** Yes (exogenous variables)
+**Covariate Support:** No (VAR models its own lags internally; does not accept `X`)
+
+> **Note:** `VARForecaster` requires at least 2 series in `y`. Passing a single-column DataFrame raises a `ValueError`.
 
 **Example:**
 ```python
@@ -239,7 +241,9 @@ VARForecaster(horizon=14, lags=7, trend='c')
 
 ### LinearForecaster
 
-Linear regression with automatic lag feature creation.
+Linear regression forecaster.
+
+> **Note:** `LinearForecaster` **requires** covariates `X` — both at `fit()` and `predict()` time. If you call `AutoForecaster.fit(y)` without providing `X`, this model is automatically skipped. It is not included in `get_default_candidate_models()`.
 
 **Parameters:**
 
@@ -247,7 +251,9 @@ Linear regression with automatic lag feature creation.
 |-----------|------|---------|----------------|-------------|
 | `horizon` | int | required | ≥ 1 | Number of steps to forecast |
 
-**Covariate Support:** Yes (automatically included as features)
+**Covariate Support:** Yes (automatically included as features when X is provided)
+
+**Requires X:** Yes — raises `ValueError` if X is not passed to `fit()` or `predict()`.
 
 **Example:**
 ```python

@@ -128,6 +128,11 @@ class VARForecaster(BaseForecaster):
         
     def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> 'VARForecaster':
         """Fit VAR model"""
+        if y.shape[1] < 2:
+            raise ValueError(
+                "VARForecaster requires at least 2 time series columns, "
+                f"but received only {y.shape[1]}. Use a univariate model instead."
+            )
         from statsmodels.tsa.api import VAR
         
         self.feature_names = y.columns.tolist()

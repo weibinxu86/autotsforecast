@@ -1,6 +1,6 @@
 # Technical Documentation
 
-AutoTSForecast v0.3.3 — Architecture and Implementation Details
+AutoTSForecast v0.4.0 — Architecture and Implementation Details
 
 ## Package Structure
 
@@ -72,8 +72,8 @@ class BaseForecaster(ABC):
 ```
 
 **Implementations:**
-- `VARForecaster` — statsmodels VAR
-- `LinearForecaster` — sklearn LinearRegression with lags
+- `VARForecaster` — statsmodels VAR (requires ≥ 2 series; does not accept `X`)
+- `LinearForecaster` — sklearn LinearRegression; **requires covariates `X`** at both fit and predict time
 - `MovingAverageForecaster` — Simple moving average
 
 ### External Models (`models/external.py`)
@@ -88,6 +88,7 @@ ML and statistical models with optional dependencies.
 | `ARIMAForecaster` | statsmodels | ✅ | Classical ARIMA |
 | `ETSForecaster` | statsmodels | ❌ | Exponential smoothing |
 | `LSTMForecaster` | darts/torch | ✅ | Deep learning |
+| `Chronos2Forecaster` | chronos-forecasting | ❌ | Zero-shot foundation model (no training) |
 
 ### BacktestValidator (`backtesting/validator.py`)
 

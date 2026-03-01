@@ -58,11 +58,13 @@ importance = analyzer.calculate_feature_importance(X_test, y_test)
 
 ## Available Models
 
-**Core Models** (included): ARIMA, ETS, Linear, MovingAverage, RandomForest, VAR
+**Core Models** (included): ARIMA, ETS, MovingAverage, RandomForest, VAR
 
-**Optional Models**: XGBoost, Prophet, LSTM (install with extras: `[ml]`, `[prophet]`, `[neural]`)
+> `LinearForecaster` is also included but **requires covariates `X`** — it is not part of the default candidate pool.
 
-**Covariate Support**: Prophet, ARIMA, XGBoost, RandomForest, LSTM
+**Optional Models**: XGBoost, Prophet, LSTM (install with extras: `[ml]`, `[prophet]`, `[neural]`), Chronos-2 (install with `[chronos]`)
+
+**Covariate Support**: Prophet, ARIMA, XGBoost, RandomForest, LSTM, Linear
 
 ## Documentation
 

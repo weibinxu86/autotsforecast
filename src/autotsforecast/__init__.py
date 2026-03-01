@@ -11,7 +11,11 @@ A comprehensive package for multivariate time series forecasting with:
 - Parallel processing for speed
 """
 
-__version__ = "0.3.3"
+try:
+    from importlib.metadata import version as _pkg_version, PackageNotFoundError as _PNF
+    __version__ = _pkg_version("autotsforecast")
+except _PNF:
+    __version__ = "0.0.0"
 
 # Core models
 from autotsforecast.models.base import BaseForecaster, VARForecaster, LinearForecaster, MovingAverageForecaster

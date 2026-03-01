@@ -1,5 +1,49 @@
 # Release Notes
 
+## v0.4.0 (March 2026)
+
+### 🚀 New & Improved
+
+- **Rewritten tutorial notebook** — `examples/autotsforecast_tutorial.ipynb` now uses a carefully designed synthetic DGP that **guarantees measurable improvements** for both showcase features:
+  - *Per-series covariates*: `region_a` is driven by promotion; `region_b` by temperature. Giving each series only its true driver removes cross-noise and produces clear RMSE gains vs. the shared-features baseline.
+  - *Hierarchical reconciliation*: OLS reconciliation enforces `total = region_a + region_b`, exploiting the accurate component forecasts to improve total-level accuracy.
+- **Portable notebook** — Added an installation cell (`pip install autotsforecast[ml]`) so the notebook runs out-of-the-box anywhere, not just inside this repo.
+- **Corrected all documentation** — `README.md`, `API_REFERENCE.md`, `TECHNICAL_DOCUMENTATION.md`, `README_PYPI.md`, `QUICKSTART.md` all updated to v0.4.0 with accurate model tables, covariate support flags, and Chronos-2 details.
+
+### 🐛 Bug Fixes (carried from v0.3.9 development)
+
+- **`get_summary()` / `print_summary()` crash in per-series mode** — Both methods now have a dedicated per-series branch returning `per_series_models` dict and per-series CV results.
+- **`VARForecaster` silent failure on single series** — Raises a clear `ValueError` when fewer than 2 columns are passed.
+- **`BacktestValidator` mutates shared model instance** — Each CV fold now deep-copies the model before fitting (fixed in both `run()` and `run_with_holdout()`).
+- **Absolute import in `validator.py`** — Changed to relative import, fixing `ImportError` when running from source before installation.
+- **`LinearForecaster` silently skipped in default candidates** — Removed from `get_default_candidate_models()`; it requires covariates and was silently dropped on every plain `fit(y)` call.
+- **Fragile `_clone_model` fallback** — Removed 15-attribute hardcoded list; now falls back to `get_params()` only, with a clear error if that also fails.
+
+### ⚙️ Internals & Tooling
+
+- **Single-source version** — `__version__` read from `importlib.metadata`, eliminating `__init__.py` / `pyproject.toml` drift.
+- **GitHub Actions CI** — Added `.github/workflows/tests.yml` running the full test suite on Python 3.9–3.12 on every push and PR.
+
+---
+
+## v0.3.9 (March 2026)
+
+### 🐛 Bug Fixes
+
+- **`get_summary()` / `print_summary()` crash in per-series mode** — Both methods now have a dedicated per-series branch. In per-series mode `get_summary()` returns `per_series_models` (dict) and `all_results` (per-series CV results) instead of crashing with a `KeyError`.
+- **`VARForecaster` silent failure on single series** — `VARForecaster.fit()` now raises a clear `ValueError` when fewer than 2 columns are passed, instead of letting statsmodels emit a confusing error.
+- **`BacktestValidator` mutates shared model instance** — Each CV fold now deep-copies the model before fitting, eliminating any risk of shared state corrupting results when running parallel or sequential folds.
+- **Absolute import in `validator.py`** — Changed `from autotsforecast.models.base import BaseForecaster` to a relative import, fixing `ImportError` when running tests from source before installation.
+- **`LinearForecaster` silently skipped in `get_default_candidate_models()`** — Removed `LinearForecaster` from the default candidate pool. It requires covariates `X` and was being silently dropped on every plain `AutoForecaster.fit(y)` call.
+- **Fragile `_clone_model` fallback** — Removed the hardcoded 15-attribute fallback list; `_clone_model` now falls back only to `get_params()` (which all built-in models expose), with a clear error message if that also fails.
+
+### ⚙️ Internals & Tooling
+
+- **Single-source version** — `__version__` is now read from package metadata via `importlib.metadata`, eliminating the drift that caused `__init__.py` to report `0.3.3` while `pyproject.toml` said `0.3.9`.
+- **CI/CD** — Added GitHub Actions workflow (`.github/workflows/tests.yml`) that runs the full test suite against Python 3.9–3.12 on every push and pull request.
+
+---
+
 ## v0.3.4 (January 2026)
 
 ### 🚀 Chronos-2 Foundation Model (NEW)

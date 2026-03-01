@@ -1,7 +1,8 @@
+import copy
 import numpy as np
 import pandas as pd
 from typing import Optional, Dict, List, Tuple
-from autotsforecast.models.base import BaseForecaster
+from ..models.base import BaseForecaster
 
 
 class BacktestValidator:
@@ -115,23 +116,18 @@ class BacktestValidator:
             X_train = X_cv.iloc[train_start:train_end] if (X_cv is not None and use_covariates) else None
             X_test = X_cv.iloc[test_start:test_end] if (X_cv is not None and use_covariates) else None
 
-            # Fit model and generate predictions for the full test window.
-            # This is required for multi-step models and models that need full-horizon
-            # future covariates (e.g., Prophet with regressors).
-            original_horizon = getattr(self.model, 'horizon', None)
-            try:
-                if original_horizon is not None:
-                    self.model.horizon = len(y_test)
+            # Clone the model for this fold to avoid mutating the shared instance
+            # and to ensure each fold starts from a clean state.
+            fold_model = copy.deepcopy(self.model)
+            if hasattr(fold_model, 'horizon'):
+                fold_model.horizon = len(y_test)
 
-                self.model.fit(y_train, X_train)
+            fold_model.fit(y_train, X_train)
 
-                if X_test is not None:
-                    predictions = self.model.predict(X_test)
-                else:
-                    predictions = self.model.predict()
-            finally:
-                if original_horizon is not None:
-                    self.model.horizon = original_horizon
+            if X_test is not None:
+                predictions = fold_model.predict(X_test)
+            else:
+                predictions = fold_model.predict()
 
             # Normalize output shape/index
             if len(predictions) != len(y_test):
@@ -215,25 +211,21 @@ class BacktestValidator:
         X_holdout = X.iloc[holdout_start:] if X is not None else None
         
         # Train final model on all training data (before holdout)
+        # Clone to avoid mutating the shared model instance.
         use_covariates = bool(getattr(self.model, 'supports_covariates', False))
         X_fit = X_train_full if (X_train_full is not None and use_covariates) else None
         X_pred = X_holdout if (X_holdout is not None and use_covariates) else None
-        
-        # Set horizon to match holdout period
-        original_horizon = getattr(self.model, 'horizon', None)
-        try:
-            if original_horizon is not None:
-                self.model.horizon = len(y_holdout)
-            
-            self.model.fit(y_train_full, X_fit)
-            
-            if X_pred is not None:
-                holdout_pred = self.model.predict(X_pred)
-            else:
-                holdout_pred = self.model.predict()
-        finally:
-            if original_horizon is not None:
-                self.model.horizon = original_horizon
+
+        holdout_model = copy.deepcopy(self.model)
+        if hasattr(holdout_model, 'horizon'):
+            holdout_model.horizon = len(y_holdout)
+
+        holdout_model.fit(y_train_full, X_fit)
+
+        if X_pred is not None:
+            holdout_pred = holdout_model.predict(X_pred)
+        else:
+            holdout_pred = holdout_model.predict()
         
         # Normalize predictions
         if len(holdout_pred) != len(y_holdout):

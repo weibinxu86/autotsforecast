@@ -28,7 +28,7 @@ def get_default_candidate_models(horizon: int) -> List[BaseForecaster]:
     if horizon < 1:
         raise ValueError("horizon must be >= 1")
 
-    from .models.base import VARForecaster, MovingAverageForecaster, LinearForecaster
+    from .models.base import VARForecaster, MovingAverageForecaster
     from .models.external import RandomForestForecaster, XGBoostForecaster, ETSForecaster, LSTMForecaster
 
     candidates: List[BaseForecaster] = [
@@ -38,7 +38,6 @@ def get_default_candidate_models(horizon: int) -> List[BaseForecaster]:
         VARForecaster(horizon=horizon, lags=2),
         RandomForestForecaster(horizon=horizon, n_lags=7, n_estimators=100, random_state=42),
         XGBoostForecaster(horizon=horizon, n_lags=7, n_estimators=100, random_state=42),
-        LinearForecaster(horizon=horizon),
         ETSForecaster(horizon=horizon, trend='add', seasonal=None),
     ]
 
@@ -170,35 +169,28 @@ class AutoForecaster:
         return pd.RangeIndex(start=0, stop=horizon, step=1)
 
     def _clone_model(self, model: BaseForecaster) -> BaseForecaster:
-        """Best-effort cloning of a candidate model to avoid state bleed between fits."""
+        """Clone a candidate model to avoid state bleed between fits.
+
+        Tries deepcopy first; if that fails, falls back to reconstructing
+        the model from ``get_params()`` (which every built-in model exposes).
+        """
         try:
             return copy.deepcopy(model)
-        except Exception as e:
-            # If deepcopy fails, try to create a new instance with same parameters
-            try:
-                # Get the model class
-                model_class = type(model)
-                # Try to get init parameters if available
-                if hasattr(model, 'get_params'):
-                    params = model.get_params()
-                    return model_class(**params)
-                else:
-                    # Fallback: try to recreate with common attributes
-                    init_params = {}
-                    for attr in ['horizon', 'lags', 'n_lags', 'window', 'n_estimators', 
-                                 'max_depth', 'learning_rate', 'random_state', 'order',
-                                 'seasonal_order', 'seasonal_periods', 'trend', 'seasonal',
-                                 'hidden_size', 'num_layers', 'dropout', 'epochs', 
-                                 'batch_size']:
-                        if hasattr(model, attr):
-                            init_params[attr] = getattr(model, attr)
-                    return model_class(**init_params)
-            except Exception as e2:
-                raise TypeError(
-                    f"Failed to clone model {model.__class__.__name__}. "
-                    "Please pass fresh model instances or models that can be deep-copied. "
-                    f"Original error: {e}. Fallback error: {e2}"
-                )
+        except Exception as deep_err:
+            # Fallback: reconstruct from declared parameters
+            if hasattr(model, 'get_params'):
+                try:
+                    return type(model)(**model.get_params())
+                except Exception as param_err:
+                    raise TypeError(
+                        f"Failed to clone model {model.__class__.__name__} via get_params(). "
+                        f"deepcopy error: {deep_err}. get_params error: {param_err}"
+                    ) from param_err
+            raise TypeError(
+                f"Failed to clone model {model.__class__.__name__}. "
+                "Implement get_params() or ensure the model supports deepcopy. "
+                f"deepcopy error: {deep_err}"
+            ) from deep_err
         
     def fit(self, y: pd.DataFrame, X: Optional[Union[pd.DataFrame, Dict[str, pd.DataFrame]]] = None) -> 'AutoForecaster':
         """
@@ -589,34 +581,49 @@ class AutoForecaster:
         summary : dict
             Dictionary containing:
             - best_model: Name of best model
-            - best_score: Performance score
+            - best_score: Performance score (None in per-series mode)
             - all_results: Results for all models
             - forecast_summary: Summary statistics of forecasts
         """
         if not self.is_fitted:
             raise ValueError("Forecaster must be fitted before getting summary.")
-        
-        summary = {
-            'best_model': self.best_model_name_,
-            'best_score': self.cv_results_[self.best_model_name_][self.metric],
-            'selection_metric': self.metric,
-            'backtesting_config': {
-                'n_splits': self.n_splits,
-                'test_size': self.test_size,
-                'window_type': self.window_type
-            },
-            'all_results': {}
-        }
-        
-        # Add results for all models
-        for model_name, results in self.cv_results_.items():
-            summary['all_results'][model_name] = {
-                'rmse': results['rmse'],
-                'mae': results['mae'],
-                'r2': results['r2'],
-                'mape': results.get('mape', None),
-                'smape': results.get('smape', None)
+
+        # Per-series mode: results are stored per-series, not globally
+        if self.per_series_models:
+            summary = {
+                'best_model': 'per-series',
+                'best_score': None,
+                'selection_metric': self.metric,
+                'backtesting_config': {
+                    'n_splits': self.n_splits,
+                    'test_size': self.test_size,
+                    'window_type': self.window_type
+                },
+                'per_series_models': dict(self.best_model_names_ or {}),
+                'all_results': self.cv_results_by_series_ or {}
             }
+        else:
+            summary = {
+                'best_model': self.best_model_name_,
+                'best_score': self.cv_results_[self.best_model_name_][self.metric],
+                'selection_metric': self.metric,
+                'backtesting_config': {
+                    'n_splits': self.n_splits,
+                    'test_size': self.test_size,
+                    'window_type': self.window_type
+                },
+                'all_results': {}
+            }
+
+            # Add results for all models
+            for model_name, results in self.cv_results_.items():
+                summary['all_results'][model_name] = {
+                    'rmse': results['rmse'],
+                    'mae': results['mae'],
+                    'r2': results['r2'],
+                    'mape': results.get('mape', None),
+                    'smape': results.get('smape', None)
+                }
         
         # Add forecast summary if available
         if self.forecasts_ is not None:
@@ -641,27 +648,35 @@ class AutoForecaster:
         print("="*80)
         
         print(f"\n🏆 Best Model: {summary['best_model']}")
-        print(f"   {summary['selection_metric'].upper()}: {summary['best_score']:.4f}")
+        if summary['best_score'] is not None:
+            print(f"   {summary['selection_metric'].upper()}: {summary['best_score']:.4f}")
         
         print(f"\n📊 Backtesting Configuration:")
         print(f"   Splits: {summary['backtesting_config']['n_splits']}")
         print(f"   Test size: {summary['backtesting_config']['test_size']}")
         print(f"   Window: {summary['backtesting_config']['window_type']}")
         
-        print(f"\n📈 All Models Performance:")
-        print(f"{'Model':<40} {'RMSE':<12} {'MAE':<12} {'R²':<12}")
-        print("-" * 80)
-        
-        # Sort by metric
-        sorted_models = sorted(
-            summary['all_results'].items(),
-            key=lambda x: x[1][summary['selection_metric']],
-            reverse=(summary['selection_metric'] == 'r2')
-        )
-        
-        for model_name, metrics in sorted_models:
-            marker = "🏆" if model_name == summary['best_model'] else "  "
-            print(f"{marker} {model_name:<38} {metrics['rmse']:>10.4f}  {metrics['mae']:>10.4f}  {metrics['r2']:>10.4f}")
+        if 'per_series_models' in summary:
+            print(f"\n🧩 Per-Series Models Selected ({len(summary['per_series_models'])} series):")
+            for j, (series, model_name) in enumerate(list(summary['per_series_models'].items())[:10], 1):
+                print(f"   {j}. {series}: {model_name}")
+            if len(summary['per_series_models']) > 10:
+                print(f"   ... ({len(summary['per_series_models'])} total)")
+        elif summary['all_results']:
+            print(f"\n📈 All Models Performance:")
+            print(f"{'Model':<40} {'RMSE':<12} {'MAE':<12} {'R²':<12}")
+            print("-" * 80)
+
+            # Sort by metric
+            sorted_models = sorted(
+                summary['all_results'].items(),
+                key=lambda x: x[1][summary['selection_metric']],
+                reverse=(summary['selection_metric'] == 'r2')
+            )
+
+            for model_name, metrics in sorted_models:
+                marker = "🏆" if model_name == summary['best_model'] else "  "
+                print(f"{marker} {model_name:<38} {metrics['rmse']:>10.4f}  {metrics['mae']:>10.4f}  {metrics['r2']:>10.4f}")
         
         if 'forecast_summary' in summary:
             print(f"\n🔮 Forecast Summary:")

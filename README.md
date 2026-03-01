@@ -5,6 +5,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI](https://img.shields.io/pypi/v/autotsforecast)](https://pypi.org/project/autotsforecast/)
+[![Tests](https://github.com/weibinxu86/autotsforecast/actions/workflows/tests.yml/badge.svg)](https://github.com/weibinxu86/autotsforecast/actions/workflows/tests.yml)
 
 AutoTSForecast automatically finds the best forecasting model for each of your time series. No more guessing whether Prophet, ARIMA, XGBoost, or **Chronos-2 foundation model** works best — let the algorithm decide. **New: Zero-shot forecasting with Chronos-2 — no training required, just pass your data and get state-of-the-art predictions!**
 
@@ -20,6 +21,17 @@ AutoTSForecast automatically finds the best forecasting model for each of your t
 | **Hierarchical Reconciliation** | Ensure forecasts add up (total = sum of parts) | Coherent forecasts across organizational levels |
 | **Parallel Processing** 🆕 | Fit many series simultaneously | Scale to thousands of series |
 | **Interpretability** | Sensitivity analysis & SHAP | Understand what drives your forecasts |
+
+## ✨ What's New in v0.4.0
+
+- **📓 Rewritten tutorial** — `examples/autotsforecast_tutorial.ipynb` redesigned with a DGP that guarantees measurable improvements for per-series covariates and hierarchical reconciliation
+- **📦 Portable notebook** — Added `pip install autotsforecast[ml]` installation cell so the notebook runs anywhere without this repo
+- **📚 Docs overhaul** — All documentation files updated: corrected model tables, covariate support flags, Chronos-2 details
+- **🐛 Bug fixes** — `get_summary()` / `print_summary()` now work correctly in per-series mode
+- **🐛 Bug fixes** — `BacktestValidator` now clones the model per fold (no shared-state mutation)
+- **🐛 Bug fixes** — `VARForecaster` raises a clear error when fewer than 2 series are provided
+- **⚙️ Internals** — Version sourced from package metadata (single source of truth)
+- **🔧 CI/CD** — GitHub Actions workflow runs the full test suite on every push/PR
 
 ## ✨ What's New in v0.3.8+
 
@@ -52,10 +64,10 @@ This gives you 6 models **out of the box**:
 |-------|-------------|
 | `ARIMAForecaster` | Classical ARIMA |
 | `ETSForecaster` | Exponential smoothing |
-| `LinearForecaster` | Linear regression with lags |
+| `LinearForecaster` | Linear regression — **requires covariates X** |
 | `MovingAverageForecaster` | Simple baseline |
 | `RandomForestForecaster` | ML with covariates ✓ |
-| `VARForecaster` | Vector autoregression |
+| `VARForecaster` | Vector autoregression — **requires ≥ 2 series** |
 
 ### Install Specific Optional Models
 
@@ -85,7 +97,8 @@ pip install "autotsforecast[viz]"
 
 | Model | Basic Install | Extra Required |
 |-------|:-------------:|----------------|
-| ARIMA, ETS, Linear, MovingAverage, RandomForest, VAR | ✅ | — |
+| ARIMA, ETS, Linear\*, MovingAverage, RandomForest, VAR | ✅ | — |
+> \* `LinearForecaster` requires covariates `X` to be passed (it is not included in `get_default_candidate_models()`).
 | XGBoostForecaster | ❌ | `pip install "autotsforecast[ml]"` |
 | ProphetForecaster | ❌ | `pip install "autotsforecast[prophet]"` |
 | LSTMForecaster | ❌ | `pip install "autotsforecast[neural]"` |
@@ -165,7 +178,7 @@ future_features = cal.transform_future(horizon=30)
 
 ```python
 from autotsforecast import AutoForecaster
-from autotsforecast.models.base import LinearForecaster
+from autotsforecast.models.base import MovingAverageForecaster
 from autotsforecast.models.external import RandomForestForecaster, XGBoostForecaster
 
 # Example: Forecasting sales for different products
@@ -192,11 +205,11 @@ X_test_dict = {
     'product_b_sales': X_product_b_test
 }
 
-# Define candidate models
+# Define candidate models (all support covariates X)
 candidates = [
-    LinearForecaster(horizon=14),
     RandomForestForecaster(horizon=14, n_lags=7),
-    XGBoostForecaster(horizon=14, n_lags=7)
+    XGBoostForecaster(horizon=14, n_lags=7),
+    MovingAverageForecaster(horizon=14, window=7),  # covariate-free baseline
 ]
 
 # AutoForecaster with per-series model selection
