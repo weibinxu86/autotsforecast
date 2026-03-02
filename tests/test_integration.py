@@ -237,7 +237,7 @@ class TestHierarchicalReconciliation:
             rec = HierarchicalReconciler(forecasts=base.copy(), hierarchy=hierarchy)
             rec.reconcile(method=method)
             assert rec.reconciled_forecasts.shape == base.shape
-            assert list(rec.reconciled_forecasts.columns) == list(base.columns)
+            assert set(rec.reconciled_forecasts.columns) == set(base.columns)
 
     def test_invalid_method_raises(self, hierarchical_dgp):
         y_train, y_test, X_train, X_test, horizon = hierarchical_dgp

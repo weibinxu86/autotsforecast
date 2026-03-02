@@ -198,8 +198,8 @@ class TestBacktestNoMutation:
         model = MovingAverageForecaster(horizon=5, window=3)
         original_horizon = model.horizon
 
-        validator = BacktestValidator(model, n_splits=3, test_size=10)
-        validator.run_with_holdout(y, holdout_size=10)
+        validator = BacktestValidator(model, n_splits=3, test_size=10, holdout_period=10)
+        validator.run_with_holdout(y)
 
         assert model.horizon == original_horizon
 

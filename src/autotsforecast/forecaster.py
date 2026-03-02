@@ -127,6 +127,11 @@ class AutoForecaster:
         per_series_models: bool = False,
         n_jobs: int = 1,
     ):
+        if not candidate_models:
+            raise ValueError(
+                "candidate_models must not be empty. "
+                "Provide at least one BaseForecaster instance."
+            )
         self.candidate_models = candidate_models
         self.metric = metric
         self.n_splits = n_splits
