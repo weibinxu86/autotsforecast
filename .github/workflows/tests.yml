@@ -30,7 +30,7 @@ jobs:
           pip install ".[ml,viz,progress,dev]"
 
       - name: Run tests
-        run: pytest tests/ -v --tb=short --cov=autotsforecast --cov-report=term-missing
+        run: pytest tests/ -v --tb=short --cov=autotsforecast --cov-report=term-missing --ignore=tests/test_results.txt --ignore=tests/test_quick_results.txt --ignore=tests/test_per_series_results.txt
 
       - name: Upload coverage
         if: matrix.python-version == '3.11'
