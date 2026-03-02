@@ -48,7 +48,7 @@ def sample_daily_data():
 def sample_hourly_data():
     """Generate sample hourly time series data."""
     np.random.seed(42)
-    dates = pd.date_range(start='2023-01-01', periods=24*30, freq='H')  # 30 days
+    dates = pd.date_range(start='2023-01-01', periods=24*30, freq='h')  # 30 days
     
     t = np.arange(len(dates))
     daily_pattern = 10 * np.sin(2 * np.pi * t / 24)
