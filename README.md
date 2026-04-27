@@ -14,7 +14,7 @@ AutoTSForecast automatically finds the best forecasting model for each of your t
 | Feature | Description | Benefit |
 |---------|-------------|---------|
 | **MCP Server** 🆕 | Plug into Claude Desktop, Cursor, Windsurf via Model Context Protocol | Any AI agent forecasts your data natively |
-| **OpenAI / Anthropic Tools** 🆕 | Ready-made function-calling schemas | GPT-4o & Claude can call forecasting tools directly |
+| **OpenAI / Anthropic Tools** 🆕 | Ready-made function-calling schemas | GPT & Claude can call forecasting tools directly |
 | **LangChain Integration** 🆕 | `BaseTool` wrappers for any LangChain agent | Build agentic pipelines in minutes |
 | **FastAPI REST Service** 🆕 | HTTP endpoints for every forecasting operation | Language-agnostic agent integration |
 | **Anomaly Detection** 🆕 | Z-score, IQR, Isolation Forest, forecast-residual | Clean data before forecasting |
@@ -33,7 +33,7 @@ AutoTSForecast automatically finds the best forecasting model for each of your t
 ## ✨ What's New in v0.5.0 — Agentic AI Edition
 
 - **🤖 MCP Server** — `autotsforecast-mcp` CLI connects directly to Claude Desktop, Cursor, and Windsurf. 7 tools: fit & forecast, backtest, prediction intervals, anomaly detection, calendar features, hierarchy reconciliation, model catalog.
-- **🔧 OpenAI & Anthropic Tool Schemas** — Drop-in `get_openai_tools()` / `get_anthropic_tools()` for GPT-4o and Claude. `handle_tool_call()` dispatcher handles everything.
+- **🔧 OpenAI & Anthropic Tool Schemas** — Drop-in `get_openai_tools()` / `get_anthropic_tools()` for GPT and Claude. `handle_tool_call()` dispatcher handles everything.
 - **🦜 LangChain Tools** — `get_autotsforecast_tools()` returns `BaseTool` instances for any LangChain ReAct or LCEL agent.
 - **🌐 FastAPI REST Service** — `autotsforecast-api` CLI starts an HTTP server at any host/port. 8 endpoints covering every operation.
 - **📡 Anomaly Detection** — `AnomalyDetector` with four methods. Detects outliers before forecasting to protect model accuracy.

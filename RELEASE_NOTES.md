@@ -6,7 +6,7 @@
 
 - **MCP Server** (`autotsforecast.mcp.server`) — Expose 7 forecasting tools to Claude Desktop, Cursor, Windsurf, and any MCP-compatible AI assistant via the Model Context Protocol. Start with `autotsforecast-mcp` CLI.
 - **FastAPI REST Service** (`autotsforecast.api.app`) — Full HTTP API with 9 endpoints. Start with `autotsforecast-api` CLI. Accepts CSV data as JSON strings or multipart file uploads.
-- **OpenAI / Anthropic Tool Schemas** (`autotsforecast.integrations.openai_schemas`) — Drop-in function-calling schemas for GPT-4o and Claude. `handle_tool_call()` dispatcher handles everything.
+- **OpenAI / Anthropic Tool Schemas** (`autotsforecast.integrations.openai_schemas`) — Drop-in function-calling schemas for GPT and Claude. `handle_tool_call()` dispatcher handles everything.
 - **LangChain Tools** (`autotsforecast.integrations.langchain_tools`) — `BaseTool` wrappers for all forecasting operations. Pass to any LangChain ReAct or LCEL agent.
 - **AnomalyDetector** (`autotsforecast.anomaly.detector`) — Four detection methods: `zscore`, `iqr`, `isolation_forest`, `forecast_residual`. Returns boolean DataFrame + Pydantic summary.
 - **InsightEngine** (`autotsforecast.nlp.insights`) — Rule-based or LLM-powered plain-English summaries and risk flags for any forecast.

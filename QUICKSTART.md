@@ -364,7 +364,7 @@ from autotsforecast.integrations.openai_schemas import (
     handle_tool_call
 )
 
-# --- OpenAI GPT-4o ---
+# --- OpenAI GPT ---
 import openai
 client = openai.OpenAI()
 
