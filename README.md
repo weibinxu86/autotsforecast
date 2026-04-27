@@ -13,14 +13,33 @@ AutoTSForecast automatically finds the best forecasting model for each of your t
 
 | Feature | Description | Benefit |
 |---------|-------------|---------|
-| **Chronos-2 Foundation Model** 🆕 | Zero-shot forecasting with pre-trained models (9M-710M params) | **No training needed** — just pass your data! |
+| **MCP Server** 🆕 | Plug into Claude Desktop, Cursor, Windsurf via Model Context Protocol | Any AI agent forecasts your data natively |
+| **OpenAI / Anthropic Tools** 🆕 | Ready-made function-calling schemas | GPT-4o & Claude can call forecasting tools directly |
+| **LangChain Integration** 🆕 | `BaseTool` wrappers for any LangChain agent | Build agentic pipelines in minutes |
+| **FastAPI REST Service** 🆕 | HTTP endpoints for every forecasting operation | Language-agnostic agent integration |
+| **Anomaly Detection** 🆕 | Z-score, IQR, Isolation Forest, forecast-residual | Clean data before forecasting |
+| **NLP Insight Engine** 🆕 | Plain-English forecast summaries (rule-based + LLM) | Agents explain forecasts in natural language |
+| **Model Registry** 🆕 | Save, load, list, and delete fitted models locally | Fit once, reuse anywhere |
+| **Structured Outputs** 🆕 | Pydantic models for all results | Machine-readable, JSON-serialisable, agent-ready |
+| **Chronos-2 Foundation Model** | Zero-shot forecasting with pre-trained models (9M-710M params) | **No training needed** — just pass your data! |
 | **Per-Series Model Selection** | Automatically pick the best model for *each* series | Different series, different patterns → optimal accuracy |
-| **Per-Series Covariates** 🆕 | Pass different features to different series | Products driven by different factors get custom features |
-| **Prediction Intervals** 🆕 | Conformal prediction with coverage guarantees | Quantify uncertainty without assumptions |
-| **Calendar Features** 🆕 | Auto-extract day-of-week, month, holidays | Handle seasonality automatically |
+| **Per-Series Covariates** | Pass different features to different series | Products driven by different factors get custom features |
+| **Prediction Intervals** | Conformal prediction with coverage guarantees | Quantify uncertainty without assumptions |
+| **Calendar Features** | Auto-extract day-of-week, month, holidays | Handle seasonality automatically |
 | **Hierarchical Reconciliation** | Ensure forecasts add up (total = sum of parts) | Coherent forecasts across organizational levels |
-| **Parallel Processing** 🆕 | Fit many series simultaneously | Scale to thousands of series |
+| **Parallel Processing** | Fit many series simultaneously | Scale to thousands of series |
 | **Interpretability** | Sensitivity analysis & SHAP | Understand what drives your forecasts |
+
+## ✨ What's New in v0.5.0 — Agentic AI Edition
+
+- **🤖 MCP Server** — `autotsforecast-mcp` CLI connects directly to Claude Desktop, Cursor, and Windsurf. 7 tools: fit & forecast, backtest, prediction intervals, anomaly detection, calendar features, hierarchy reconciliation, model catalog.
+- **🔧 OpenAI & Anthropic Tool Schemas** — Drop-in `get_openai_tools()` / `get_anthropic_tools()` for GPT-4o and Claude. `handle_tool_call()` dispatcher handles everything.
+- **🦜 LangChain Tools** — `get_autotsforecast_tools()` returns `BaseTool` instances for any LangChain ReAct or LCEL agent.
+- **🌐 FastAPI REST Service** — `autotsforecast-api` CLI starts an HTTP server at any host/port. 8 endpoints covering every operation.
+- **📡 Anomaly Detection** — `AnomalyDetector` with four methods. Detects outliers before forecasting to protect model accuracy.
+- **💬 InsightEngine** — Rule-based trend/risk analysis + optional LLM narrative for any LLM client.
+- **📦 ModelRegistry** — `registry.save(auto, name="v1")` / `registry.load("v1")` for local model persistence with JSON index.
+- **📐 Structured Outputs** — `auto.to_structured()` returns a Pydantic `ForecastResult`. All new APIs are JSON-serialisable.
 
 ## ✨ What's New in v0.4.0
 
@@ -53,7 +72,49 @@ pip install "autotsforecast[all]"
 
 This installs **all 10 models** plus visualization, interpretability, and new features.
 
-### Basic Install (Core Models Only)
+### 🤖 Agentic AI Features (v0.5.0)
+
+```bash
+# MCP server — connect to Claude Desktop, Cursor, Windsurf
+pip install "autotsforecast[mcp]"
+
+# FastAPI REST service — HTTP interface for any agent or app
+pip install "autotsforecast[api]"
+
+# LangChain tools — for LangChain / LCEL agents
+pip install "autotsforecast[langchain]"
+
+# All agentic integrations in one shot
+pip install "autotsforecast[agentic]"
+
+# Streamlit web app (no-code UI)
+pip install "autotsforecast[app]"
+```
+
+### 🖥️ Streamlit Web App
+
+autotsforecast ships with a full no-code web UI built with Streamlit.
+It is **not imported as a Python module** — you run it as a web server:
+
+```bash
+pip install "autotsforecast[app]"
+git clone https://github.com/weibinxu86/autotsforecast
+cd autotsforecast
+python3 -m streamlit run streamlit_app.py
+# → opens http://localhost:8501
+```
+
+**What the app includes:**
+- Upload any CSV or use built-in demo data
+- Select target columns and (optionally) per-series covariates
+- Choose from 9 model types with a dropdown
+- Backtest toggle + per-series best-model table
+- What-if scenario comparison (up to 5 scenarios)
+- Download forecast + metrics as CSV
+
+For a minimal 80-line example you can customise, see `my_minimal_app.py` (generated by `examples/agentic_tutorial.ipynb` Step 9 — run the notebook cell, then `cd autotsforecast && python3 -m streamlit run my_minimal_app.py`).
+
+
 
 ```bash
 pip install autotsforecast
@@ -105,6 +166,9 @@ pip install "autotsforecast[viz]"
 | Chronos2Forecaster | ❌ | `pip install "autotsforecast[chronos]"` |
 | SHAP Analysis | ❌ | `pip install "autotsforecast[interpret]"` |
 | Interactive Plots | ❌ | `pip install "autotsforecast[viz]"` |
+| MCP Server | ❌ | `pip install "autotsforecast[mcp]"` |
+| FastAPI REST | ❌ | `pip install "autotsforecast[api]"` |
+| LangChain Tools | ❌ | `pip install "autotsforecast[langchain]"` |
 
 ## Quick Start
 
@@ -357,6 +421,120 @@ fitted_models = pf.parallel_series_fit(
     y=y_train,
     X=X_train
 )
+```
+
+## 🤖 Agentic AI — v0.5.0
+
+### Anomaly Detection
+
+Clean your data before forecasting:
+
+```python
+from autotsforecast.anomaly.detector import AnomalyDetector
+
+detector = AnomalyDetector(method='zscore', contamination=0.05)
+anomalies = detector.fit_predict(y_train)  # bool DataFrame
+summary = detector.get_summary()           # AnomalyResult (Pydantic)
+print(f"Found {summary.total_anomalies} anomalies")
+```
+
+### Structured Outputs
+
+Get machine-readable results from AutoForecaster:
+
+```python
+auto = AutoForecaster(candidates, metric='rmse')
+auto.fit(y_train)
+forecasts = auto.forecast()
+result = auto.to_structured()   # ForecastResult (Pydantic)
+print(result.model_dump_json()) # Perfect for agents / REST APIs
+```
+
+### Natural Language Insights
+
+```python
+from autotsforecast.nlp.insights import InsightEngine
+
+engine = InsightEngine(mode='rule_based')
+summary = engine.summarize_forecast_dataframes(y_train, forecasts, y_test)
+risks   = engine.flag_risks_from_dataframes(y_train, forecasts)
+```
+
+### Model Registry
+
+Save and reload fitted models:
+
+```python
+from autotsforecast.registry.store import ModelRegistry
+
+registry = ModelRegistry()
+registry.save(auto, name='production_v1', tags={'version': '1.0'})
+
+# Later, in a different process or deployment:
+auto_loaded = registry.load('production_v1')
+new_forecasts = auto_loaded.forecast()
+```
+
+### MCP Server (Claude Desktop / Cursor / Windsurf)
+
+```bash
+# Install
+pip install "autotsforecast[mcp]"
+
+# Start server (stdio transport)
+autotsforecast-mcp
+```
+
+Add to `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "autotsforecast": {
+      "command": "autotsforecast-mcp"
+    }
+  }
+}
+```
+
+Claude can then use 7 tools: `fit_and_forecast`, `run_backtest`, `prediction_intervals`, `anomaly_detection`, `calendar_features`, `reconcile_hierarchy`, `model_catalog`.
+
+### FastAPI REST Service
+
+```bash
+# Install
+pip install "autotsforecast[api]"
+
+# Start server (default: http://0.0.0.0:8000)
+autotsforecast-api
+```
+
+Endpoints: `GET /health`, `GET /models`, `POST /forecast`, `POST /backtest`, `POST /intervals`, `POST /anomalies`, `POST /calendar-features`, `POST /reconcile`.
+
+### OpenAI / Anthropic Tool Calling
+
+```python
+from autotsforecast.integrations.openai_schemas import (
+    get_openai_tools, get_anthropic_tools, handle_tool_call
+)
+
+# OpenAI
+tools = get_openai_tools()
+# response = openai.chat.completions.create(model="gpt-4o", tools=tools, ...)
+# result = handle_tool_call(tool_name, arguments)
+
+# Anthropic
+tools = get_anthropic_tools()
+# response = anthropic.messages.create(tools=tools, ...)
+```
+
+### LangChain Integration
+
+```python
+from autotsforecast.integrations.langchain_tools import get_autotsforecast_tools
+
+tools = get_autotsforecast_tools()
+# Pass to any LangChain ReAct or LCEL agent
+# agent = create_react_agent(llm, tools, prompt)
 ```
 
 ## Requirements

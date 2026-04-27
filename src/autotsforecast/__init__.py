@@ -58,6 +58,44 @@ from autotsforecast.visualization.progress import ProgressTracker, progress_bar
 # New features: Parallel Processing
 from autotsforecast.utils.parallel import ParallelForecaster, parallel_map, batch_forecast
 
+# ── Agentic AI extensions (v0.5.0) ──────────────────────────────────────────
+
+# Anomaly detection
+try:
+    from autotsforecast.anomaly.detector import AnomalyDetector
+except Exception:
+    AnomalyDetector = None  # type: ignore[assignment,misc]
+
+# Natural-language insight engine
+try:
+    from autotsforecast.nlp.insights import InsightEngine
+except Exception:
+    InsightEngine = None  # type: ignore[assignment,misc]
+
+# Local model registry
+try:
+    from autotsforecast.registry.store import ModelRegistry
+except Exception:
+    ModelRegistry = None  # type: ignore[assignment,misc]
+
+# OpenAI / Anthropic function-calling schemas
+try:
+    from autotsforecast.integrations.openai_schemas import (
+        get_openai_tools,
+        get_anthropic_tools,
+        handle_tool_call,
+    )
+except Exception:
+    get_openai_tools = None  # type: ignore[assignment]
+    get_anthropic_tools = None  # type: ignore[assignment]
+    handle_tool_call = None  # type: ignore[assignment]
+
+# LangChain tools
+try:
+    from autotsforecast.integrations.langchain_tools import get_autotsforecast_tools
+except Exception:
+    get_autotsforecast_tools = None  # type: ignore[assignment]
+
 __all__ = [
     # Core Models
     "BaseForecaster",
@@ -99,4 +137,12 @@ __all__ = [
     "ParallelForecaster",
     "parallel_map",
     "batch_forecast",
+    # Agentic AI (v0.5.0)
+    "AnomalyDetector",
+    "InsightEngine",
+    "ModelRegistry",
+    "get_openai_tools",
+    "get_anthropic_tools",
+    "handle_tool_call",
+    "get_autotsforecast_tools",
 ]

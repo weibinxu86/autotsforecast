@@ -186,4 +186,233 @@ pip install "autotsforecast[chronos]"
 ## More Resources
 
 - [API Reference](API_REFERENCE.md) — Complete parameter docs
-- [Tutorial](examples/autotsforecast_tutorial.ipynb) — Hands-on examples
+- [Tutorial](examples/autotsforecast_tutorial.ipynb) — Core forecasting tutorial
+- [Agentic AI Tutorial](examples/agentic_tutorial.ipynb) — MCP, OpenAI tools, anomaly detection, registry
+
+---
+
+## 🤖 Agentic AI (v0.5.0)
+
+### 12. Anomaly Detection
+
+Detect outliers before forecasting to protect model accuracy:
+
+```python
+from autotsforecast.anomaly.detector import AnomalyDetector
+
+# Available methods: 'zscore', 'iqr', 'isolation_forest', 'forecast_residual'
+detector = AnomalyDetector(method='zscore', contamination=0.05)
+anomalies = detector.fit_predict(y_train)   # bool DataFrame, True = anomaly
+summary = detector.get_summary()            # AnomalyResult Pydantic model
+
+print(f"Method: {summary.method}")
+print(f"Total anomalies: {summary.total_anomalies}")
+print(summary.per_series)  # dict[series_name, count]
+```
+
+**Installation:** core package (no extras needed)
+
+### 13. Structured Outputs (Pydantic)
+
+Get JSON-serialisable, agent-ready output from AutoForecaster:
+
+```python
+from autotsforecast import AutoForecaster
+
+auto = AutoForecaster(candidate_models=candidates, metric='rmse')
+auto.fit(y_train)
+forecasts = auto.forecast()
+
+result = auto.to_structured()         # ForecastResult Pydantic model
+print(result.best_model)              # "ARIMAForecaster"
+print(result.metric)                  # "rmse"
+print(result.model_dump_json())       # JSON string — pass to any agent
+```
+
+**Installation:** `pip install pydantic>=2.0` (optional — works without it too)
+
+### 14. Natural Language Insights
+
+Generate plain-English summaries of forecasts for agents and reports:
+
+```python
+from autotsforecast.nlp.insights import InsightEngine
+
+engine = InsightEngine(mode='rule_based')
+summary = engine.summarize_forecast_dataframes(y_train, forecasts, y_test)
+risks   = engine.flag_risks_from_dataframes(y_train, forecasts)
+report  = engine.generate_report(result, y_train, y_test)
+
+# Or use with your LLM client (OpenAI, Anthropic, etc.)
+engine_llm = InsightEngine(mode='llm', llm_client=openai_client, model='gpt-4o')
+narrative = engine_llm.summarize_forecast_dataframes(y_train, forecasts, y_test)
+```
+
+**Installation:** core package (`mode='rule_based'`); any OpenAI-compatible client for `mode='llm'`
+
+### 15. Model Registry
+
+Persist fitted models locally, reload them across processes or deployments:
+
+```python
+from autotsforecast.registry.store import ModelRegistry
+
+registry = ModelRegistry()                  # Default: ~/.autotsforecast/registry/
+
+# Save
+registry.save(auto, name='production_v1', tags={'env': 'prod', 'version': '1.0'})
+
+# List all saved models
+df = registry.list()
+print(df[['name', 'model_class', 'saved_at']])
+
+# Load and use
+auto_loaded = registry.load('production_v1')
+new_forecasts = auto_loaded.forecast()
+
+# Clean up
+registry.delete('production_v1')
+```
+
+**Installation:** core package (no extras needed)
+
+### 16. MCP Server (Claude Desktop / Cursor / Windsurf)
+
+Expose all forecasting tools to AI assistants via the Model Context Protocol:
+
+```bash
+# Install
+pip install "autotsforecast[mcp]"
+
+# Run server (stdio transport, compatible with all MCP clients)
+autotsforecast-mcp
+```
+
+**Configure Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "autotsforecast": {
+      "command": "autotsforecast-mcp"
+    }
+  }
+}
+```
+
+**Available MCP tools:**
+| Tool | Description |
+|------|-------------|
+| `fit_and_forecast` | AutoForecaster: select best model and forecast |
+| `run_backtest` | Time-series cross-validation for any model |
+| `prediction_intervals` | Conformal prediction intervals |
+| `anomaly_detection` | Detect outliers in CSV data |
+| `calendar_features` | Extract time-based features |
+| `reconcile_hierarchy` | Hierarchical forecast reconciliation |
+| `model_catalog` | List all available models |
+
+Once configured, simply ask Claude: *"Forecast the next 30 days of my sales data"* and attach a CSV.
+
+### 17. FastAPI REST Service
+
+Start an HTTP server that any language, agent, or microservice can call:
+
+```bash
+# Install
+pip install "autotsforecast[api]"
+
+# Start server (default: http://0.0.0.0:8000)
+autotsforecast-api
+
+# Custom host/port
+autotsforecast-api --host 127.0.0.1 --port 9000
+```
+
+**Endpoints:**
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| GET | `/models` | List available models |
+| POST | `/forecast` | Fit + forecast from JSON |
+| POST | `/forecast/upload` | Fit + forecast from CSV file upload |
+| POST | `/backtest` | Run cross-validation |
+| POST | `/intervals` | Compute prediction intervals |
+| POST | `/reconcile` | Hierarchical reconciliation |
+| POST | `/calendar-features` | Calendar feature extraction |
+| POST | `/anomalies` | Anomaly detection |
+
+**Example request:**
+```python
+import httpx, json
+
+data = {
+    "csv_data": y_train.to_csv(),
+    "horizon": 14,
+    "metric": "rmse"
+}
+resp = httpx.post("http://localhost:8000/forecast", json=data)
+print(resp.json()["forecasts"])
+```
+
+### 18. OpenAI / Anthropic Tool Calling
+
+Use autotsforecast as function-calling tools with any LLM:
+
+```python
+from autotsforecast.integrations.openai_schemas import (
+    get_openai_tools,
+    get_anthropic_tools,
+    handle_tool_call
+)
+
+# --- OpenAI GPT-4o ---
+import openai
+client = openai.OpenAI()
+
+tools = get_openai_tools()
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Forecast next 14 days from this CSV: ..."}],
+    tools=tools
+)
+
+# Dispatch the tool call and get the result
+for call in response.choices[0].message.tool_calls:
+    result = handle_tool_call(call.function.name, call.function.arguments)
+    print(result)
+
+# --- Anthropic Claude ---
+import anthropic
+client = anthropic.Anthropic()
+
+tools = get_anthropic_tools()
+response = client.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    tools=tools,
+    messages=[{"role": "user", "content": "Detect anomalies in this data: ..."}]
+)
+```
+
+**Installation:** `pip install openai` or `pip install anthropic` (no autotsforecast extras needed)
+
+### 19. LangChain Integration
+
+Use autotsforecast tools with any LangChain or LCEL agent:
+
+```python
+from autotsforecast.integrations.langchain_tools import get_autotsforecast_tools
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_openai import ChatOpenAI
+
+tools = get_autotsforecast_tools()
+llm = ChatOpenAI(model="gpt-4o")
+
+agent = create_react_agent(llm, tools, prompt)
+executor = AgentExecutor(agent=agent, tools=tools)
+
+result = executor.invoke({
+    "input": "Analyze my sales data for anomalies, then forecast the next 14 days."
+})
+```
+
+**Installation:** `pip install "autotsforecast[langchain]"`

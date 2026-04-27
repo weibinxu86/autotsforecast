@@ -207,10 +207,25 @@ def build_models(choice: str, horizon: int, ma_window: int, n_lags: int, has_cov
     elif choice == "VAR":
         return [VARForecaster(horizon=horizon)]
     elif choice == "ARIMA":
+        try:
+            from autotsforecast.models.external import ARIMAForecaster as _AF  # noqa: F401
+        except ImportError:
+            st.error("❌ statsmodels is not installed. Run: `pip install statsmodels` then restart the app.")
+            return [MovingAverageForecaster(horizon=horizon, window=ma_window)]
         return [ARIMAForecaster(horizon=horizon)]
     elif choice == "ETS":
+        try:
+            from autotsforecast.models.external import ETSForecaster as _EF  # noqa: F401
+        except ImportError:
+            st.error("❌ statsmodels is not installed. Run: `pip install statsmodels` then restart the app.")
+            return [MovingAverageForecaster(horizon=horizon, window=ma_window)]
         return [ETSForecaster(horizon=horizon)]
     elif choice == "Prophet":
+        try:
+            from autotsforecast.models.external import ProphetForecaster as _PF  # noqa: F401
+        except ImportError:
+            st.error("❌ Prophet is not installed. Run: `pip install prophet` then restart the app.")
+            return [MovingAverageForecaster(horizon=horizon, window=ma_window)]
         if not has_covariates:
             st.info("ℹ️ Prophet works without covariates but may benefit from them. Proceeding without external regressors.")
         return [ProphetForecaster(horizon=horizon)]
@@ -219,6 +234,11 @@ def build_models(choice: str, horizon: int, ma_window: int, n_lags: int, has_cov
             st.info("ℹ️ RandomForest will use lag features. Consider adding covariates for better accuracy.")
         return [RandomForestForecaster(horizon=horizon, n_lags=n_lags)]
     elif choice == "XGBoost":
+        try:
+            from autotsforecast.models.external import XGBoostForecaster as _XF  # noqa: F401
+        except ImportError:
+            st.error("❌ xgboost is not installed. Run: `pip install xgboost` then restart the app.")
+            return [MovingAverageForecaster(horizon=horizon, window=ma_window)]
         if not has_covariates:
             st.info("ℹ️ XGBoost will use lag features. Consider adding covariates for better accuracy.")
         return [XGBoostForecaster(horizon=horizon, n_lags=n_lags)]
@@ -271,12 +291,22 @@ def forecast_series(ts: pd.DataFrame, horizon: int, model_choice: str, ma_window
         st.error("No valid models available for the current configuration.")
         return None, None, None, None
 
+    # VAR is multivariate — it must fit on all series together, not per-series.
+    # When VAR is the only candidate, switch to multivariate mode.
+    # If only 1 target series is selected, VAR still won't work — fall back to MA.
+    all_var = all(c.__class__.__name__ == 'VARForecaster' for c in candidates)
+    if all_var and len(y_train.columns) < 2:
+        st.warning("⚠️ VAR requires at least 2 target series. Switching to Moving Average.")
+        candidates = [MovingAverageForecaster(horizon=horizon, window=ma_window)]
+        all_var = False
+    use_per_series = not all_var
+
     auto = AutoForecaster(
         candidate_models=candidates,
         metric="rmse",
         n_splits=3,
         test_size=min(14, max(2, horizon // 2)),
-        per_series_models=True,
+        per_series_models=use_per_series,
         verbose=False,
     )
 

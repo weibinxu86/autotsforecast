@@ -1,5 +1,44 @@
 # Release Notes
 
+## v0.5.0 (June 2026) — Agentic AI Edition
+
+### 🤖 New Agentic AI Features
+
+- **MCP Server** (`autotsforecast.mcp.server`) — Expose 7 forecasting tools to Claude Desktop, Cursor, Windsurf, and any MCP-compatible AI assistant via the Model Context Protocol. Start with `autotsforecast-mcp` CLI.
+- **FastAPI REST Service** (`autotsforecast.api.app`) — Full HTTP API with 9 endpoints. Start with `autotsforecast-api` CLI. Accepts CSV data as JSON strings or multipart file uploads.
+- **OpenAI / Anthropic Tool Schemas** (`autotsforecast.integrations.openai_schemas`) — Drop-in function-calling schemas for GPT-4o and Claude. `handle_tool_call()` dispatcher handles everything.
+- **LangChain Tools** (`autotsforecast.integrations.langchain_tools`) — `BaseTool` wrappers for all forecasting operations. Pass to any LangChain ReAct or LCEL agent.
+- **AnomalyDetector** (`autotsforecast.anomaly.detector`) — Four detection methods: `zscore`, `iqr`, `isolation_forest`, `forecast_residual`. Returns boolean DataFrame + Pydantic summary.
+- **InsightEngine** (`autotsforecast.nlp.insights`) — Rule-based or LLM-powered plain-English summaries and risk flags for any forecast.
+- **ModelRegistry** (`autotsforecast.registry.store`) — Local model persistence: `save()`, `load()`, `list()`, `delete()`. Default storage at `~/.autotsforecast/registry/`.
+- **Structured Outputs** (`autotsforecast.schemas`) — Pydantic v2 result models (`ForecastResult`, `BacktestResult`, `AnomalyResult`, etc.) with graceful fallback when pydantic is not installed. `AutoForecaster.to_structured()` added.
+
+### 📦 New Optional Extras
+
+| Extra | Command | Contents |
+|-------|---------|---------|
+| `mcp` | `pip install "autotsforecast[mcp]"` | `mcp>=1.0` |
+| `api` | `pip install "autotsforecast[api]"` | `fastapi`, `uvicorn`, `python-multipart` |
+| `langchain` | `pip install "autotsforecast[langchain]"` | `langchain` |
+| `nlp` | `pip install "autotsforecast[nlp]"` | `openai` |
+| `agentic` | `pip install "autotsforecast[agentic]"` | All of the above |
+
+### 🆕 CLI Entry Points
+
+- `autotsforecast-mcp` — Start MCP server (stdio transport)
+- `autotsforecast-api` — Start FastAPI server (HTTP)
+
+### ✅ Testing
+
+- 50 tests pass, 7 skipped (expected — extras not installed in CI)
+- 7 new test files: `test_schemas.py`, `test_anomaly.py`, `test_insights.py`, `test_registry.py`, `test_mcp_tools.py`, `test_openai_schemas.py`, `test_api.py`
+
+### 🔄 Backwards Compatibility
+
+All existing APIs are fully backwards compatible. New features are opt-in extras.
+
+---
+
 ## v0.4.0 (March 2026)
 
 ### 🚀 New & Improved

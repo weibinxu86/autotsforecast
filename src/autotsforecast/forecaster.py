@@ -37,11 +37,15 @@ def get_default_candidate_models(horizon: int) -> List[BaseForecaster]:
         VARForecaster(horizon=horizon, lags=1),
         VARForecaster(horizon=horizon, lags=2),
         RandomForestForecaster(horizon=horizon, n_lags=7, n_estimators=100, random_state=42),
-        XGBoostForecaster(horizon=horizon, n_lags=7, n_estimators=100, random_state=42),
         ETSForecaster(horizon=horizon, trend='add', seasonal=None),
     ]
 
-    # Optional deep learning model
+    # Optional models — silently skip if the dependency is not installed
+    try:
+        candidates.append(XGBoostForecaster(horizon=horizon, n_lags=7, n_estimators=100, random_state=42))
+    except ImportError:
+        pass
+
     try:
         candidates.append(LSTMForecaster(horizon=horizon))
     except ImportError:
@@ -750,4 +754,60 @@ class AutoForecaster:
         print(f"  Saved: {metadata['save_timestamp']}")
         
         return auto
+
+    def to_structured(self, forecasts: Optional[pd.DataFrame] = None):
+        """
+        Return a structured ``ForecastResult`` Pydantic model.
+
+        Enables machine-readable output for agent frameworks, LangChain,
+        OpenAI function calling, and the MCP server.
+
+        Parameters
+        ----------
+        forecasts : pd.DataFrame, optional
+            Forecast DataFrame from ``forecast()``. If ``None``,
+            uses ``self.forecasts_`` if available.
+
+        Returns
+        -------
+        ForecastResult
+            Pydantic model with series names, horizon, dates, values,
+            best model name, metric, and CV score.
+
+        Example
+        -------
+        >>> auto.fit(y_train)
+        >>> fc = auto.forecast()
+        >>> result = auto.to_structured(fc)
+        >>> print(result.model_dump_json())
+        """
+        from autotsforecast.schemas import ForecastResult
+
+        fc = forecasts if forecasts is not None else self.forecasts_
+        if fc is None:
+            raise ValueError("No forecasts available. Call forecast() first or pass forecasts=.")
+
+        dates = [str(d) for d in fc.index.tolist()]
+        values = {col: fc[col].tolist() for col in fc.columns}
+
+        # Best model name
+        if self.per_series_models and self.best_model_names_:
+            best_model: Any = dict(self.best_model_names_)
+        else:
+            best_model = self.best_model_name_ or "unknown"
+
+        # CV score
+        metric_value = None
+        if not self.per_series_models and self.best_model_name_ and self.cv_results_:
+            metric_value = self.cv_results_.get(self.best_model_name_, {}).get(self.metric)
+
+        return ForecastResult(
+            series_names=list(fc.columns),
+            horizon=len(fc),
+            dates=dates,
+            values=values,
+            best_model=best_model,
+            metric=self.metric,
+            metric_value=metric_value,
+        )
 

@@ -1,16 +1,17 @@
 # Technical Documentation
 
-AutoTSForecast v0.4.0 — Architecture and Implementation Details
+AutoTSForecast v0.5.0 — Architecture and Implementation Details
 
 ## Package Structure
 
 ```
 autotsforecast/
 ├── __init__.py              # Package exports and version
-├── forecaster.py            # AutoForecaster class
+├── forecaster.py            # AutoForecaster class (+ to_structured())
+├── schemas.py               # Pydantic result models (ForecastResult, etc.)
 ├── models/
 │   ├── base.py              # BaseForecaster, VAR, Linear, MovingAverage
-│   ├── external.py          # RandomForest, XGBoost, Prophet, ARIMA, ETS, LSTM
+│   ├── external.py          # RandomForest, XGBoost, Prophet, ARIMA, ETS, LSTM, Chronos2
 │   └── selection.py         # ModelSelector for CV-based selection
 ├── backtesting/
 │   └── validator.py         # BacktestValidator for time series CV
@@ -23,6 +24,19 @@ autotsforecast/
 │   └── engine.py            # FeatureEngine (general feature engineering)
 ├── uncertainty/
 │   └── intervals.py         # PredictionIntervals, ConformalPredictor
+├── anomaly/                 # NEW v0.5.0
+│   └── detector.py          # AnomalyDetector (zscore, iqr, isolation_forest, residual)
+├── nlp/                     # NEW v0.5.0
+│   └── insights.py          # InsightEngine (rule-based + LLM narrative)
+├── registry/                # NEW v0.5.0
+│   └── store.py             # ModelRegistry (local pickle + JSON index)
+├── mcp/                     # NEW v0.5.0
+│   └── server.py            # MCP server with 7 forecasting tools
+├── api/                     # NEW v0.5.0
+│   └── app.py               # FastAPI REST service
+├── integrations/            # NEW v0.5.0
+│   ├── openai_schemas.py    # OpenAI/Anthropic function-calling schemas
+│   └── langchain_tools.py   # LangChain BaseTool wrappers
 ├── visualization/
 │   ├── plots.py             # plot_forecast, plot_model_comparison, etc.
 │   └── progress.py          # ProgressTracker for long operations
@@ -257,4 +271,137 @@ Add method to `HierarchicalReconciler.reconcile()`:
 def reconcile(self, method='ols'):
     if method == 'my_method':
         return self._my_reconciliation()
+```
+
+---
+
+## 🤖 Agentic AI Components (v0.5.0)
+
+### AnomalyDetector (`anomaly/detector.py`)
+
+Wraps multiple outlier detection algorithms with a unified interface.
+
+**Design:**
+- `fit(y)` stores fitted detector state per series
+- `predict(y)` returns a boolean DataFrame (`True` = anomaly)
+- `fit_predict(y)` is shortcut for fit then predict
+- `get_summary()` returns `AnomalyResult` Pydantic model
+
+**Method dispatch:**
+
+```python
+_METHODS = {
+    'zscore': _detect_zscore,
+    'iqr': _detect_iqr,
+    'isolation_forest': _detect_isolation_forest,
+    'forecast_residual': _detect_residual,
+}
+```
+
+Each method operates column-by-column (per series), allowing different series to have different anomaly patterns.
+
+### InsightEngine (`nlp/insights.py`)
+
+**Two modes:**
+- `rule_based` — deterministic text based on statistical summaries (trend direction, MAPE, risk flags). No external dependencies.
+- `llm` — passes the same summaries to an OpenAI-compatible `llm_client` for a polished narrative.
+
+**Flow:**
+1. `summarize_forecast_dataframes()` — computes per-series statistics → formats prompt → returns text
+2. `flag_risks_from_dataframes()` — checks for high volatility, long flat series, large forecast jumps → returns warning list
+3. `generate_report()` — combines `ForecastResult` metadata + summary + risks into a full report
+
+### ModelRegistry (`registry/store.py`)
+
+**Storage layout** (`~/.autotsforecast/registry/` by default):
+```
+registry/
+├── index.json              # List of RegistryEntry dicts
+├── production_v1.pkl       # Pickled AutoForecaster
+└── staging_v2.pkl
+```
+
+**Operations:**
+- `save()` — pickle → write to `{name}.pkl`, append `RegistryEntry` to `index.json`
+- `load()` — read `index.json`, unpickle `{name}.pkl`
+- `list()` — read `index.json` → return as pandas DataFrame
+- `delete()` — remove `.pkl`, remove entry from `index.json`
+- `clear()` — remove all `.pkl` files, reset `index.json` to `[]`
+
+### Schemas (`schemas.py`)
+
+Pydantic v2 result models with graceful fallback (custom `BaseModel` stub if pydantic not installed).
+
+**Inheritance hierarchy:**
+```
+BaseModel (pydantic or stub)
+├── ForecastResult
+├── BacktestResult
+├── IntervalResult
+├── ImportanceResult
+├── AnomalyResult
+├── InsightResult
+├── ModelInfo → ModelCatalog
+└── RegistryEntry
+```
+
+All models support `.model_dump()` and `.model_dump_json()` (or `dict()` and `json()` as aliases in the stub).
+
+### MCP Server (`mcp/server.py`)
+
+Implements the [Model Context Protocol](https://modelcontextprotocol.io) for Claude Desktop, Cursor, and Windsurf.
+
+**Architecture:**
+- `create_server()` — instantiates `mcp.Server("autotsforecast")` and registers 7 tools via `@server.call_tool()`
+- Each tool takes CSV string input (not file paths) for stateless operation
+- `main()` — runs `mcp.run(server, stdio_transport)` as CLI entry point
+
+**Tool handler pattern:**
+```python
+@server.call_tool()
+async def call_tool(name: str, arguments: dict):
+    if name == "fit_and_forecast":
+        return await _run_fit_and_forecast(**arguments)
+    ...
+```
+
+### FastAPI Service (`api/app.py`)
+
+Wraps all forecasting operations as HTTP endpoints.
+
+**Architecture:**
+- Pydantic request/response models for each endpoint
+- CSV data accepted as JSON string fields or multipart file upload (`/forecast/upload`)
+- All handlers are thin wrappers around the same helpers used by the MCP server
+
+### Integration Layer (`integrations/`)
+
+**`openai_schemas.py`:**
+- `get_openai_tools()` — returns tool defs in OpenAI `tools` format (list of dicts with `type`, `function`, `parameters`)
+- `get_anthropic_tools()` — same, Anthropic schema format
+- `handle_tool_call(name, arguments)` — dispatch table that parses arguments and calls the correct helper
+
+**`langchain_tools.py`:**
+- Each forecasting operation is a `BaseTool` subclass with `name`, `description`, and `_run()` method
+- `get_autotsforecast_tools()` — returns list of all tool instances
+- Graceful ImportError if langchain not installed
+
+---
+
+## Dependency Architecture
+
+```
+Core (always installed)
+├── autotsforecast.*         # All base functionality
+├── anomaly.detector         # AnomalyDetector (no extras)
+├── nlp.insights             # InsightEngine rule_based (no extras)
+├── registry.store           # ModelRegistry (no extras)
+└── schemas                  # Pydantic models (pydantic optional)
+
+Optional extras
+├── [mcp]    → mcp>=1.0         → mcp.server
+├── [api]    → fastapi, uvicorn → api.app
+├── [langchain] → langchain     → integrations.langchain_tools
+├── [nlp]    → openai           → InsightEngine mode='llm'
+└── [agentic] → all of the above
 ```

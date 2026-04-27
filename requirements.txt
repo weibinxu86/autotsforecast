@@ -1,6 +1,8 @@
+# Streamlit app dependencies (autotsforecast[app])
+# Install with: pip install "autotsforecast[app]"
 streamlit>=1.30.0
 matplotlib>=3.4.0
 seaborn>=0.11.0
-autotsforecast>=0.3.3
+autotsforecast>=0.5.0
 xgboost>=2.0.0
 prophet>=1.1.0

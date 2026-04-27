@@ -1158,3 +1158,336 @@ for item in ProgressTracker.track(items, description="Processing"):
     # Do work with item
     pass
 ```
+
+---
+
+## 🤖 Agentic AI — v0.5.0
+
+---
+
+## Anomaly Detection
+
+### AnomalyDetector
+
+Detect anomalies in time series data using statistical and ML methods.
+
+**Location:** `autotsforecast.anomaly.detector`
+
+**Parameters:**
+
+| Parameter | Type | Default | Allowed Values | Description |
+|-----------|------|---------|----------------|-------------|
+| `method` | str | `'zscore'` | `'zscore'`, `'iqr'`, `'isolation_forest'`, `'forecast_residual'` | Detection algorithm |
+| `contamination` | float | `0.05` | 0.0–0.5 | Expected proportion of anomalies |
+| `threshold` | float | `3.0` | > 0 | Z-score / IQR multiplier (ignored for isolation_forest) |
+
+**Methods:**
+
+| Method | Signature | Returns | Description |
+|--------|-----------|---------|-------------|
+| `fit(y)` | `fit(y: pd.DataFrame)` | `self` | Fit detector to data |
+| `predict(y)` | `predict(y: pd.DataFrame)` | `pd.DataFrame[bool]` | Predict anomalies (True = anomaly) |
+| `fit_predict(y)` | `fit_predict(y: pd.DataFrame)` | `pd.DataFrame[bool]` | Fit and predict in one call |
+| `get_summary()` | `get_summary()` | `AnomalyResult` | Pydantic summary of detection results |
+
+**Detection Methods:**
+
+| Method | Description | Extra Dep |
+|--------|-------------|-----------|
+| `zscore` | Points > `threshold` standard deviations from mean | — |
+| `iqr` | Points outside `threshold × IQR` from Q1/Q3 | — |
+| `isolation_forest` | sklearn IsolationForest (unsupervised) | scikit-learn |
+| `forecast_residual` | Moving-average residual thresholding | — |
+
+**Example:**
+```python
+from autotsforecast.anomaly.detector import AnomalyDetector
+
+detector = AnomalyDetector(method='zscore', contamination=0.05, threshold=3.0)
+anomalies = detector.fit_predict(y_train)   # pd.DataFrame of bool
+summary = detector.get_summary()
+
+print(f"Total anomalies: {summary.total_anomalies}")
+print(f"Per series: {summary.per_series}")
+```
+
+---
+
+## NLP / Insight Engine
+
+### InsightEngine
+
+Generate natural-language summaries and risk flags for forecasts.
+
+**Location:** `autotsforecast.nlp.insights`
+
+**Parameters:**
+
+| Parameter | Type | Default | Allowed Values | Description |
+|-----------|------|---------|----------------|-------------|
+| `mode` | str | `'rule_based'` | `'rule_based'`, `'llm'` | Insight generation mode |
+| `llm_client` | object | `None` | Any OpenAI-compatible client | LLM client (required when `mode='llm'`) |
+| `model` | str | `'gpt-4o'` | Any model name | LLM model to use |
+
+**Methods:**
+
+| Method | Signature | Returns | Description |
+|--------|-----------|---------|-------------|
+| `summarize_forecast_dataframes` | `(y_train, forecasts, y_test=None)` | `str` | Plain-English forecast summary |
+| `flag_risks_from_dataframes` | `(y_train, forecasts)` | `list[str]` | List of risk warnings |
+| `generate_report` | `(result, y_train, y_test=None)` | `str` | Full narrative report |
+
+**Example:**
+```python
+from autotsforecast.nlp.insights import InsightEngine
+
+# Rule-based (no LLM needed)
+engine = InsightEngine(mode='rule_based')
+summary = engine.summarize_forecast_dataframes(y_train, forecasts, y_test)
+risks = engine.flag_risks_from_dataframes(y_train, forecasts)
+report = engine.generate_report(result, y_train, y_test)
+
+# LLM-powered
+import openai
+engine = InsightEngine(mode='llm', llm_client=openai.OpenAI(), model='gpt-4o')
+narrative = engine.summarize_forecast_dataframes(y_train, forecasts, y_test)
+```
+
+---
+
+## Model Registry
+
+### ModelRegistry
+
+Save, load, list, and delete fitted models locally.
+
+**Location:** `autotsforecast.registry.store`
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `registry_dir` | str or Path | `~/.autotsforecast/registry/` | Directory where models are stored |
+
+**Methods:**
+
+| Method | Signature | Returns | Description |
+|--------|-----------|---------|-------------|
+| `save` | `save(model, name, tags=None)` | `str` (path) | Pickle model + write JSON index entry |
+| `load` | `load(name)` | fitted model | Unpickle and return model |
+| `list` | `list()` | `pd.DataFrame` | Table of all saved models |
+| `get_entry` | `get_entry(name)` | `RegistryEntry` | Pydantic metadata for a model |
+| `delete` | `delete(name)` | None | Remove model file and index entry |
+| `clear` | `clear()` | None | Delete all models in registry |
+
+**Example:**
+```python
+from autotsforecast.registry.store import ModelRegistry
+
+registry = ModelRegistry()          # Default: ~/.autotsforecast/registry/
+registry.save(auto, name='v1', tags={'env': 'production'})
+
+df = registry.list()
+print(df[['name', 'model_class', 'saved_at']])
+
+auto2 = registry.load('v1')
+forecasts = auto2.forecast()
+registry.delete('v1')
+```
+
+---
+
+## Structured Outputs
+
+### AutoForecaster.to_structured()
+
+Convert forecasting results to a Pydantic model for agent-friendly JSON output.
+
+**Signature:**
+```python
+to_structured(forecasts: pd.DataFrame = None) -> ForecastResult
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `forecasts` | pd.DataFrame | `None` | Override forecasts; defaults to `self.forecasts_` |
+
+**Returns:** `ForecastResult` with fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `best_model` | str | Name of best model |
+| `metric` | str | Optimisation metric used |
+| `series_count` | int | Number of forecasted series |
+| `horizon` | int | Forecast horizon |
+| `per_series_models` | dict or None | Best model per series (if `per_series_models=True`) |
+| `forecast_values` | dict | Series → list of forecast values |
+
+**Example:**
+```python
+auto.fit(y_train)
+auto.forecast()
+result = auto.to_structured()
+print(result.best_model)
+print(result.model_dump_json())
+```
+
+---
+
+## OpenAI / Anthropic Integration
+
+### get_openai_tools()
+
+Return OpenAI function-calling tool definitions.
+
+**Location:** `autotsforecast.integrations.openai_schemas`
+
+```python
+get_openai_tools() -> list[dict]
+```
+
+Returns a list of tool dicts in OpenAI `tools` format. Pass directly to `openai.chat.completions.create(tools=...)`.
+
+### get_anthropic_tools()
+
+Return Anthropic tool definitions.
+
+```python
+get_anthropic_tools() -> list[dict]
+```
+
+Returns a list of tool dicts in Anthropic `tools` format. Pass directly to `anthropic.messages.create(tools=...)`.
+
+### handle_tool_call()
+
+Dispatch a tool call and return a string result.
+
+```python
+handle_tool_call(tool_name: str, arguments: Union[str, dict]) -> str
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `tool_name` | str | Name of the tool to invoke |
+| `arguments` | str or dict | JSON string or dict of arguments |
+
+**Available tool names:** `fit_and_forecast`, `run_backtest`, `prediction_intervals`, `anomaly_detection`, `calendar_features`, `reconcile_hierarchy`, `model_catalog`
+
+**Example:**
+```python
+from autotsforecast.integrations.openai_schemas import get_openai_tools, handle_tool_call
+
+tools = get_openai_tools()
+# ... LLM call ...
+result = handle_tool_call("fit_and_forecast", {"csv_data": "...", "horizon": 14})
+print(result)
+```
+
+---
+
+## LangChain Integration
+
+### get_autotsforecast_tools()
+
+Return LangChain `BaseTool` instances for all forecasting operations.
+
+**Location:** `autotsforecast.integrations.langchain_tools`
+
+```python
+get_autotsforecast_tools() -> list[BaseTool]
+```
+
+Returns a list of `BaseTool` subclasses — one per forecasting operation. Pass to any LangChain agent.
+
+**Example:**
+```python
+from autotsforecast.integrations.langchain_tools import get_autotsforecast_tools
+
+tools = get_autotsforecast_tools()
+# agent = create_react_agent(llm, tools, prompt)
+```
+
+---
+
+## MCP Server
+
+### create_server()
+
+Create the MCP server instance.
+
+**Location:** `autotsforecast.mcp.server`
+
+```python
+create_server() -> mcp.Server
+```
+
+Returns a configured `mcp.Server` with 7 registered tools.
+
+### main()
+
+CLI entry point. Runs the MCP server over stdio.
+
+```python
+main() -> None
+```
+
+Invoked by `autotsforecast-mcp` CLI command.
+
+**MCP Tool Reference:**
+
+| Tool Name | Input | Output | Description |
+|-----------|-------|--------|-------------|
+| `fit_and_forecast` | `csv_data`, `horizon`, `metric`, `n_splits`, `per_series` | JSON with `best_model`, `forecasts` | AutoForecaster fit + forecast |
+| `run_backtest` | `csv_data`, `model_name`, `horizon`, `n_splits`, `test_size` | JSON with `mean_rmse`, `fold_results` | Cross-validation |
+| `prediction_intervals` | `csv_data`, `horizon`, `coverage` | JSON with `lower_80`, `upper_80`, `lower_95`, `upper_95` | Conformal prediction |
+| `anomaly_detection` | `csv_data`, `method`, `contamination` | JSON with `anomaly_mask`, `summary` | Outlier detection |
+| `calendar_features` | `csv_data` | JSON with feature DataFrame | Time-based features |
+| `reconcile_hierarchy` | `forecast_csv`, `hierarchy` | JSON with reconciled forecasts | Hierarchical reconciliation |
+| `model_catalog` | — | JSON list of models | All available models |
+
+---
+
+## FastAPI REST Service
+
+### app
+
+**Location:** `autotsforecast.api.app`
+
+FastAPI application instance. Start with `autotsforecast-api` CLI.
+
+**REST API Reference:**
+
+| Method | Endpoint | Request Body | Response |
+|--------|----------|-------------|---------|
+| `GET` | `/health` | — | `{"status": "ok"}` |
+| `GET` | `/models` | — | `{"models": [...]}` |
+| `POST` | `/forecast` | `{"csv_data": str, "horizon": int, "metric": str}` | `ForecastResult` JSON |
+| `POST` | `/forecast/upload` | multipart CSV file | `ForecastResult` JSON |
+| `POST` | `/backtest` | `{"csv_data": str, "model_name": str, "horizon": int, "n_splits": int}` | backtest JSON |
+| `POST` | `/intervals` | `{"csv_data": str, "horizon": int, "coverage": list}` | intervals JSON |
+| `POST` | `/reconcile` | `{"forecast_csv": str, "hierarchy": dict}` | reconciled JSON |
+| `POST` | `/calendar-features` | `{"csv_data": str}` | features JSON |
+| `POST` | `/anomalies` | `{"csv_data": str, "method": str, "contamination": float}` | anomaly JSON |
+| `POST` | `/insights` | `{"csv_data": str, "horizon": int}` | insights text |
+
+---
+
+## Schemas (Pydantic)
+
+**Location:** `autotsforecast.schemas`
+
+All result models inherit from Pydantic `BaseModel` (or a stub when pydantic is not installed).
+
+| Class | Fields | Description |
+|-------|--------|-------------|
+| `ForecastResult` | `best_model`, `metric`, `series_count`, `horizon`, `per_series_models`, `forecast_values` | AutoForecaster output |
+| `BacktestResult` | `model_name`, `n_splits`, `test_size`, `mean_rmse`, `fold_results` | BacktestValidator output |
+| `IntervalResult` | `method`, `coverage`, `lower_80`, `upper_80`, `lower_95`, `upper_95` | PredictionIntervals output |
+| `ImportanceResult` | `method`, `feature_names`, `importance_scores` | DriverAnalyzer output |
+| `AnomalyResult` | `method`, `total_anomalies`, `per_series`, `contamination` | AnomalyDetector output |
+| `InsightResult` | `summary`, `risks`, `report` | InsightEngine output |
+| `ModelInfo` | `name`, `description`, `requires_covariates`, `extra` | Catalog entry |
+| `ModelCatalog` | `models` | List of ModelInfo |
+| `RegistryEntry` | `name`, `model_class`, `saved_at`, `tags`, `file_path` | Registry index entry |
