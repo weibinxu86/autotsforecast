@@ -1,34 +1,86 @@
 # AutoTSForecast
 
-**Automated Time Series Forecasting + Agentic AI Integrations**
+**Automated Time Series Forecasting — 16+ Models, Smart Presets, AI-Native**
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-AutoTSForecast automatically finds the best forecasting model for each of your time series — and in v0.5.0, it connects directly to AI agents via MCP, OpenAI function calling, LangChain, and a FastAPI REST service.
+AutoTSForecast evaluates every model — statistical, ML, and deep learning — and picks the winner for your data.
 
 ## Installation
 
 ```bash
-# Core + all models
+# Core + all 16 models
 pip install "autotsforecast[all]"
 
 # Agentic AI features (MCP, FastAPI, LangChain, OpenAI tools)
 pip install "autotsforecast[agentic]"
+
+# New v0.6.0 boosting models
+pip install "autotsforecast[lightgbm]"
+pip install "autotsforecast[catboost]"
 ```
 
-## Key Features
-
-### 🤖 AutoForecaster — Automatic Per-Series Model Selection
-Evaluates multiple models via cross-validation and automatically selects the best one for each time series.
+## Quick Start
 
 ```python
 from autotsforecast import AutoForecaster
 
-auto = AutoForecaster(candidate_models=[...], metric='rmse')
+# Profile your data, get preset recommendation
+result = AutoForecaster.profile_data(y_train)
+result.print_summary()  # → recommended_preset: 'balanced'
+
+# One-line auto-selection
+auto = AutoForecaster(preset="balanced", horizon=14)
 auto.fit(y_train)
 forecasts = auto.forecast()
-result = auto.to_structured()   # JSON-serialisable Pydantic model (v0.5.0)
+auto.print_report()  # ranked leaderboard
+```
+
+## All 16 Available Models
+
+| Model | Type | Covariates |
+|-------|------|------------|
+| `MovingAverageForecaster` | Statistical | ❌ |
+| `ARIMAForecaster` | Statistical | ❌ |
+| `ETSForecaster` | Statistical | ❌ |
+| `ThetaForecaster` 🆕 | Statistical | ❌ |
+| `CrostonForecaster` 🆕 | Statistical (intermittent) | ❌ |
+| `VARForecaster` | Statistical | ❌ |
+| `LinearForecaster` | ML | ✅ |
+| `ElasticNetForecaster` 🆕 | ML | ✅ |
+| `RandomForestForecaster` | ML | ✅ |
+| `XGBoostForecaster` | ML | ✅ |
+| `LightGBMForecaster` 🆕 | ML | ✅ |
+| `CatBoostForecaster` 🆕 | ML | ✅ |
+| `LSTMForecaster` | Deep learning | ❌ |
+| `NBEATSForecaster` 🆕 | Deep learning | ❌ |
+| `NHiTSForecaster` 🆕 | Deep learning | ❌ |
+| `TFTForecaster` 🆕 | Deep learning | ❌ |
+| `Chronos2Forecaster` | Foundation | ❌ |
+
+## Key Features
+
+### 🤖 AutoForecaster — Automatic Per-Series Model Selection
+
+```python
+from autotsforecast import AutoForecaster
+
+# Preset-based (v0.6.0)
+auto = AutoForecaster(preset="balanced", horizon=14)
+
+# Budget-aware (v0.6.0)
+auto = AutoForecaster(
+    preset="accuracy",
+    horizon=30,
+    n_jobs=-1,           # parallel candidates
+    time_limit=120,      # stop after 2 minutes
+    max_models=8,
+    backtest_mode="fast"
+)
+
+auto.fit(y_train)
+result = auto.to_structured()   # JSON-serialisable Pydantic model
 ```
 
 ### 🌐 MCP Server — Claude Desktop / Cursor / Windsurf (v0.5.0)

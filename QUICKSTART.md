@@ -4,24 +4,46 @@
 
 ```bash
 pip install autotsforecast           # Core
-pip install "autotsforecast[all]"    # All features
+pip install "autotsforecast[all]"    # All 16 models + extras
 ```
 
-## 1. Basic Forecasting
+## 1. Fastest Path — Presets (v0.6.0)
+
+```python
+from autotsforecast import AutoForecaster
+
+# Profile your data first (optional)
+report = AutoForecaster.profile_data(y_train)
+report.print_summary()  # → recommended_preset: 'balanced'
+
+# One-line auto-selection
+auto = AutoForecaster(preset="balanced", horizon=14)
+auto.fit(y_train)
+forecasts = auto.forecast()
+auto.print_report()   # ranked leaderboard
+```
+
+| Preset | Best for |
+|--------|----------|
+| `fast` | Quick exploration, large portfolios |
+| `balanced` | Default — good accuracy, reasonable speed |
+| `accuracy` | Overnight runs, maximum accuracy |
+| `zero_shot` | No training data (Chronos-2) |
+| `intermittent` | Sparse / lumpy demand |
+| `hierarchical` | Multi-level org hierarchies |
+
+## 2. Basic Forecasting (single model)
 
 ```python
 import pandas as pd
 from autotsforecast.models.base import MovingAverageForecaster
-
-# Your data
-y_train, y_test = df.iloc[:150], df.iloc[150:]
 
 model = MovingAverageForecaster(horizon=30, window=7)
 model.fit(y_train)
 predictions = model.predict()
 ```
 
-## 2. AutoForecaster (Auto Model Selection)
+## 3. AutoForecaster — Custom Candidate List
 
 ```python
 from autotsforecast import AutoForecaster
@@ -40,7 +62,21 @@ forecasts = auto.forecast()
 print(f"Best model: {auto.best_model_name_}")
 ```
 
-## 3. Using Covariates
+## 4. Parallel + Budget-Aware Search
+
+```python
+auto = AutoForecaster(
+    preset="accuracy",
+    horizon=14,
+    n_jobs=-1,           # all CPU cores
+    time_limit=60,       # stop after 1 minute
+    max_models=6,        # at most 6 models
+    backtest_mode="fast" # 2 folds instead of 5
+)
+auto.fit(y_train)
+```
+
+## 5. Using Covariates
 
 ```python
 from autotsforecast.models.external import RandomForestForecaster
@@ -50,15 +86,14 @@ model.fit(y_train, X=X_train)
 predictions = model.predict(X=X_test)
 ```
 
-## 4. Per-Series Covariates
+## 6. Per-Series Covariates
 
 Different features for different series:
 
 ```python
-# Different covariates per series
 X_train_dict = {
-    'series_a': X_train[['temperature']],   # Series A uses temperature
-    'series_b': X_train[['promotion']],     # Series B uses promotion
+    'series_a': X_train[['temperature']],
+    'series_b': X_train[['promotion']],
 }
 
 auto = AutoForecaster(candidates, per_series_models=True)
@@ -66,7 +101,7 @@ auto.fit(y_train, X=X_train_dict)
 forecasts = auto.forecast(X=X_test_dict)
 ```
 
-## 5. Prediction Intervals
+## 7. Prediction Intervals
 
 ```python
 from autotsforecast.uncertainty.intervals import PredictionIntervals
@@ -77,7 +112,7 @@ intervals = pi.predict(forecasts)
 # intervals['lower_95'], intervals['upper_95']
 ```
 
-## 6. Calendar Features
+## 8. Calendar Features
 
 ```python
 from autotsforecast.features.calendar import CalendarFeatures

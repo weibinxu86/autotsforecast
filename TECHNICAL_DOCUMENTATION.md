@@ -1,17 +1,19 @@
 # Technical Documentation
 
-AutoTSForecast v0.5.0 — Architecture and Implementation Details
+AutoTSForecast v0.6.0 — Architecture and Implementation Details
 
 ## Package Structure
 
 ```
 autotsforecast/
 ├── __init__.py              # Package exports and version
-├── forecaster.py            # AutoForecaster class (+ to_structured())
+├── forecaster.py            # AutoForecaster, PRESETS, get_preset_models, _evaluate_candidate_worker
 ├── schemas.py               # Pydantic result models (ForecastResult, etc.)
 ├── models/
 │   ├── base.py              # BaseForecaster, VAR, Linear, MovingAverage
-│   ├── external.py          # RandomForest, XGBoost, Prophet, ARIMA, ETS, LSTM, Chronos2
+│   ├── external.py          # RF, XGBoost, Prophet, ARIMA, ETS, LSTM, Chronos2,
+│   │                        # LightGBM, CatBoost, ElasticNet, Theta, Croston,  (NEW v0.6.0)
+│   │                        # NBEATS, NHiTS, TFT                               (NEW v0.6.0)
 │   └── selection.py         # ModelSelector for CV-based selection
 ├── backtesting/
 │   └── validator.py         # BacktestValidator for time series CV
@@ -24,17 +26,17 @@ autotsforecast/
 │   └── engine.py            # FeatureEngine (general feature engineering)
 ├── uncertainty/
 │   └── intervals.py         # PredictionIntervals, ConformalPredictor
-├── anomaly/                 # NEW v0.5.0
+├── anomaly/
 │   └── detector.py          # AnomalyDetector (zscore, iqr, isolation_forest, residual)
-├── nlp/                     # NEW v0.5.0
+├── nlp/
 │   └── insights.py          # InsightEngine (rule-based + LLM narrative)
-├── registry/                # NEW v0.5.0
+├── registry/
 │   └── store.py             # ModelRegistry (local pickle + JSON index)
-├── mcp/                     # NEW v0.5.0
+├── mcp/
 │   └── server.py            # MCP server with 7 forecasting tools
-├── api/                     # NEW v0.5.0
+├── api/
 │   └── app.py               # FastAPI REST service
-├── integrations/            # NEW v0.5.0
+├── integrations/
 │   ├── openai_schemas.py    # OpenAI/Anthropic function-calling schemas
 │   └── langchain_tools.py   # LangChain BaseTool wrappers
 ├── visualization/
@@ -43,7 +45,8 @@ autotsforecast/
 └── utils/
     ├── data.py              # Data utilities
     ├── parallel.py          # ParallelForecaster, parallel_map
-    └── preprocessing.py     # CovariatePreprocessor
+    ├── preprocessing.py     # CovariatePreprocessor
+    └── profiler.py          # DatasetProfiler, ProfileResult  (NEW v0.6.0)
 ```
 
 ## Core Components
@@ -52,25 +55,54 @@ autotsforecast/
 
 Main entry point for automatic model selection.
 
-**Key Features:**
-- Cross-validation based model selection
+**Key Features (v0.6.0):**
+- Smart presets (`preset='balanced'`) auto-populate candidate lists
+- Dataset profiler (`profile_data(y)`) characterises data before fitting
+- Parallel candidate evaluation (`n_jobs=-1` across candidates, not just series)
+- Budget-aware search: `time_limit` (seconds) and `max_models` cap search cost
+- Fast backtest modes: `backtest_mode='fast'` (2 folds) or `'last_fold'` (1 fold)
+- Structured report: `get_report()` / `print_report()` return ranked leaderboard
 - Per-series model selection (`per_series_models=True`)
 - Per-series covariates (pass `X` as `Dict[str, DataFrame]`)
-- Parallel fitting (`n_jobs=-1`)
 
 **Flow:**
-1. `fit(y, X)` → Runs CV for each candidate model
+1. `fit(y, X)` → Resolves preset → Evaluates candidates (parallel or sequential)
 2. Selects best model(s) based on metric
 3. Refits best model(s) on full training data
 4. `forecast(X)` → Generates predictions
+5. `get_report()` → Returns structured selection results
+
+**Preset Resolution:**
+```python
+# PRESETS dict maps preset name → description string
+# get_preset_models(preset, horizon) returns List[BaseForecaster]
+auto = AutoForecaster(preset='balanced', horizon=14)
+# → internally calls get_preset_models('balanced', 14)
+```
 
 **Per-Series Covariates Implementation:**
 ```python
 # In fit():
 if isinstance(X, dict):
-    self._per_series_covariates_ = True
+    self._per_series_covariates_ = X
     # Each series uses its own X[series_name]
 ```
+
+### DatasetProfiler (`utils/profiler.py`) — NEW v0.6.0
+
+Characterises a dataset and recommends a forecasting strategy.
+
+**Detects:**
+- Frequency (from DatetimeIndex)
+- Missing rate and zero rate
+- Lag-1 autocorrelation
+- Trend strength (linear fit residual variance)
+- Seasonal autocorrelation at detected period
+
+**Routing thresholds:**
+- `zero_rate > 0.30` → `'intermittent'` preset
+- `n_obs < 50` → `'zero_shot'` preset
+- `n_obs ≥ 200` and no seasonality issues → `'balanced'` or `'accuracy'`
 
 ### BaseForecaster (`models/base.py`)
 

@@ -50,7 +50,32 @@ class BaseForecaster(ABC):
     def get_params(self) -> Dict[str, Any]:
         """Get model parameters"""
         return {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
-    
+
+    def clone(self) -> 'BaseForecaster':
+        """Return a fresh, unfitted copy with the same hyperparameters.
+
+        Uses ``get_params()`` so subclasses that override it to return only
+        init-time parameters work correctly.  Falls back to ``deepcopy`` for
+        models that expose internal state through ``get_params()``.
+
+        Example
+        -------
+        >>> fresh = model.clone()
+        >>> fresh.fit(new_data)
+        """
+        try:
+            return type(self)(**self.get_params())
+        except TypeError:
+            import copy
+            obj = copy.deepcopy(self)
+            obj.is_fitted = False
+            return obj
+
+    def __repr__(self) -> str:
+        params = self.get_params()
+        param_str = ', '.join(f"{k}={v!r}" for k, v in params.items())
+        return f"{self.__class__.__name__}({param_str})"
+
     def save(self, filepath: str):
         """Save model to disk using joblib
         

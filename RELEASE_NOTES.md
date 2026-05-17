@@ -1,5 +1,79 @@
 # Release Notes
 
+## v0.6.0 (May 2026) — 16 Models, Smart Presets, Faster Search
+
+### 🚀 New Models (8 added, 16 total)
+
+- **`LightGBMForecaster`** — LightGBM gradient boosting with direct multi-step forecasting. Fast, accurate, supports covariates. `pip install "autotsforecast[lightgbm]"`
+- **`CatBoostForecaster`** — CatBoost gradient boosting. Strong on categorical-adjacent tabular patterns. `pip install "autotsforecast[catboost]"`
+- **`ElasticNetForecaster`** — Elastic-Net regularised regression with lag features. Fast baseline, no extra install.
+- **`ThetaForecaster`** — Theta method (statsmodels). Reliable on seasonal series with long history.
+- **`CrostonForecaster`** — Croston/SBA method for intermittent (sparse) demand. No extra install.
+- **`NBEATSForecaster`** — Neural Basis Expansion Analysis via Darts. `pip install "autotsforecast[neural]"`
+- **`NHiTSForecaster`** — Neural Hierarchical Interpolation via Darts. `pip install "autotsforecast[neural]"`
+- **`TFTForecaster`** — Temporal Fusion Transformer via Darts. `pip install "autotsforecast[neural]"`
+
+### 📦 Smart Presets
+
+One-word model selection:
+
+```python
+auto = AutoForecaster(preset="balanced", horizon=14)
+```
+
+| Preset | Models | Use case |
+|--------|--------|----------|
+| `fast` | Linear, MA, ElasticNet, Theta, ARIMA, ETS | < 60 s budget |
+| `balanced` | + RF, XGBoost, LightGBM | Default recommendation |
+| `accuracy` | All ML + NBEATS, NHiTS, TFT | Overnight runs |
+| `zero_shot` | Chronos-2 | Cold-start / no training data |
+| `intermittent` | Croston, ElasticNet, LightGBM | Sparse demand |
+| `hierarchical` | VAR, RF, XGBoost, LightGBM | Multi-level org hierarchies |
+
+### ⚡ Parallel & Budget-Aware Search
+
+```python
+auto = AutoForecaster(
+    preset="accuracy",
+    horizon=30,
+    n_jobs=-1,           # parallel across candidates
+    time_limit=120,      # stop after 2 minutes
+    max_models=8,        # try at most 8 models
+    backtest_mode="fast" # 2 folds instead of 5
+)
+```
+
+### 🔍 Dataset Profiler
+
+```python
+result = AutoForecaster.profile_data(y_train)
+result.print_summary()
+# → recommended_preset: 'balanced'
+```
+
+### 📊 Structured Report
+
+```python
+auto.fit(y)
+auto.print_report()   # ranked leaderboard + selection rationale
+report = auto.get_report()  # machine-readable dict
+```
+
+### 📦 New Optional Extras
+
+| Extra | Install | Contents |
+|-------|---------|----------|
+| `lightgbm` | `pip install "autotsforecast[lightgbm]"` | `lightgbm>=3.0` |
+| `catboost` | `pip install "autotsforecast[catboost]"` | `catboost>=1.0` |
+
+`[ml]` extra now includes LightGBM and CatBoost. `[all]` includes everything.
+
+### 🔄 Backwards Compatibility
+
+All existing `candidate_models=[...]` usage is fully backwards compatible.
+
+---
+
 ## v0.5.0 (June 2026) — Agentic AI Edition
 
 ### 🤖 New Agentic AI Features

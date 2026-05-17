@@ -113,6 +113,7 @@ class ModelSelector:
     def _cross_validate(self, model: BaseForecaster, y: pd.DataFrame, 
                        X: Optional[pd.DataFrame], n_folds: int) -> List[float]:
         """Perform time series cross-validation"""
+        import copy
         scores = []
         fold_size = len(y) // (n_folds + 1)
         
@@ -128,9 +129,11 @@ class ModelSelector:
             # Check if model requires exogenous variables
             if isinstance(model, LinearForecaster) and X is None:
                 return [float('inf')]
-            
-            model.fit(y_train, X_train)
-            predictions = self._generate_validation_predictions(model, y_train, y_test, X_train, X_test)
+
+            # Deep-copy to avoid state bleed across folds
+            fold_model = copy.deepcopy(model)
+            fold_model.fit(y_train, X_train)
+            predictions = self._generate_validation_predictions(fold_model, y_train, y_test, X_train, X_test)
             
             score = self._calculate_metric(y_test, predictions)
             scores.append(score)

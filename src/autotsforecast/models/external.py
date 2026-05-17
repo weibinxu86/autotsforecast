@@ -53,6 +53,44 @@ def _import_chronos():
     return Chronos2Pipeline
 
 
+@lru_cache(maxsize=1)
+def _import_lightgbm():
+    import lightgbm as lgb
+
+    return lgb
+
+
+@lru_cache(maxsize=1)
+def _import_catboost():
+    from catboost import CatBoostRegressor
+
+    return CatBoostRegressor
+
+
+@lru_cache(maxsize=1)
+def _import_darts_nbeats():
+    from darts.models import NBEATSModel
+    from darts import TimeSeries
+
+    return NBEATSModel, TimeSeries
+
+
+@lru_cache(maxsize=1)
+def _import_darts_nhits():
+    from darts.models import NHiTSModel
+    from darts import TimeSeries
+
+    return NHiTSModel, TimeSeries
+
+
+@lru_cache(maxsize=1)
+def _import_darts_tft():
+    from darts.models import TFTModel
+    from darts import TimeSeries
+
+    return TFTModel, TimeSeries
+
+
 class RandomForestForecaster(BaseForecaster):
     """Random Forest forecaster with lag features and covariate support.
     
@@ -913,7 +951,11 @@ class LSTMForecaster(BaseForecaster):
         try:
             torch, nn = _import_torch()
         except ImportError as exc:
-            raise ImportError("pytorch is required for LSTMForecaster. Install with: pip install torch") from exc
+            raise ImportError(
+                'PyTorch is required for LSTMForecaster. '
+                'Install with: pip install "autotsforecast[neural]" '
+                'or: pip install torch'
+            ) from exc
         
         super().__init__(horizon)
         self._torch = torch
@@ -1266,3 +1308,1036 @@ class Chronos2Forecaster(BaseForecaster):
         )
         
         return pd.DataFrame(results, index=future_dates)
+
+
+# ---------------------------------------------------------------------------
+# New models added in v0.6.0
+# ---------------------------------------------------------------------------
+
+# ── Shared helper ────────────────────────────────────────────────────────────
+def _build_lag_df(y: pd.DataFrame, n_lags: int) -> pd.DataFrame:
+    """Build a lag feature DataFrame from y (reused by several models)."""
+    lag_frames = []
+    for lag in range(1, n_lags + 1):
+        lagged = y.shift(lag)
+        lagged.columns = [f"{col}_lag{lag}" for col in y.columns]
+        lag_frames.append(lagged)
+    return pd.concat(lag_frames, axis=1)
+
+
+def _prediction_features(last_values: pd.DataFrame, n_lags: int,
+                         trained_with_cov: bool,
+                         covariate_columns: Optional[List],
+                         X: Optional[pd.DataFrame],
+                         step: int) -> pd.DataFrame:
+    """Create a one-row feature vector for recursive multi-step prediction."""
+    feats: list = []
+    feat_names: list = []
+    for lag in range(1, n_lags + 1):
+        if lag <= len(last_values):
+            row = last_values.iloc[-lag]
+            feats.extend(row.values.tolist())
+            feat_names.extend([f"{col}_lag{lag}" for col in last_values.columns])
+    if trained_with_cov:
+        if X is None or len(X) == 0:
+            raise ValueError("Model was trained with covariates but none were provided for prediction.")
+        row_idx = min(step, len(X) - 1)
+        feats.extend(X.iloc[row_idx].values.tolist())
+        feat_names.extend(X.columns.tolist())
+    return pd.DataFrame([feats], columns=feat_names)
+
+
+def _direct_fit_loop(y: pd.DataFrame, lag_df: pd.DataFrame,
+                     X: Optional[pd.DataFrame], horizon: int,
+                     make_model_fn):
+    """
+    Shared direct multi-output training loop used by LightGBM, CatBoost,
+    and ElasticNet forecasters.
+
+    Returns: list of lists – outer is horizon step, inner is per-column model.
+    """
+    models_by_step = []
+    for h in range(1, horizon + 1):
+        y_shifted = y.shift(-h)
+        if X is not None:
+            X_h = X.shift(-h)
+            X_train_h = pd.concat([lag_df, X_h], axis=1).dropna()
+        else:
+            X_train_h = lag_df.dropna()
+        train_idx = X_train_h.index.intersection(y_shifted.dropna().index)
+        X_train_h = X_train_h.loc[train_idx]
+        y_train_h = y_shifted.loc[train_idx]
+        models_h = []
+        for col in y.columns:
+            m = make_model_fn()
+            m.fit(X_train_h, y_train_h[col])
+            models_h.append(m)
+        models_by_step.append(models_h)
+    return models_by_step
+
+
+def _direct_predict_loop(models_by_step: list, last_values: pd.DataFrame,
+                         feature_names: list, n_lags: int,
+                         trained_with_cov: bool,
+                         covariate_columns: Optional[List],
+                         X: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Shared direct multi-output prediction loop."""
+    lv = last_values.copy()
+    predictions = []
+    for h, models_h in enumerate(models_by_step):
+        X_pred = _prediction_features(lv, n_lags, trained_with_cov, covariate_columns, X, h)
+        pred_h = [m.predict(X_pred)[0] for m in models_h]
+        predictions.append(pred_h)
+        new_row = pd.DataFrame([pred_h], columns=feature_names)
+        lv = pd.concat([lv, new_row], ignore_index=True)
+    return pd.DataFrame(predictions, columns=feature_names)
+
+
+# ── LightGBMForecaster ───────────────────────────────────────────────────────
+
+class LightGBMForecaster(BaseForecaster):
+    """LightGBM forecaster with lag features and covariate support.
+
+    Drop-in replacement for :class:`XGBoostForecaster` backed by LightGBM.
+    Typically trains 5-10x faster than XGBoost on CPU for the same depth, and
+    handles large numbers of features and series more efficiently.
+
+    Parameters
+    ----------
+    n_lags : int, default=7
+        Number of lagged values used as features.
+    n_estimators : int, default=100
+        Number of boosting rounds.
+    max_depth : int, default=-1
+        Maximum tree depth (−1 = unlimited, LightGBM default).
+    learning_rate : float, default=0.1
+        Boosting learning rate.
+    num_leaves : int, default=31
+        Maximum number of leaves in one tree.
+    horizon : int, default=1
+        Forecast horizon.
+    random_state : int, default=42
+        Random seed.
+    preprocess_covariates : bool, default=True
+        Auto-encode categorical covariates.
+    verbose : int, default=-1
+        LightGBM verbosity (−1 = silent).
+    **lgb_params
+        Extra keyword arguments forwarded to ``LGBMRegressor``.
+    """
+
+    supports_covariates: bool = True
+
+    def __init__(
+        self,
+        n_lags: int = 7,
+        n_estimators: int = 100,
+        max_depth: int = -1,
+        learning_rate: float = 0.1,
+        num_leaves: int = 31,
+        horizon: int = 1,
+        random_state: int = 42,
+        preprocess_covariates: bool = True,
+        verbose: int = -1,
+        **lgb_params,
+    ):
+        try:
+            lgb = _import_lightgbm()
+        except ImportError as exc:
+            raise ImportError(
+                "lightgbm is required for LightGBMForecaster. "
+                'Install with: pip install "autotsforecast[lightgbm]" '
+                "or: pip install lightgbm"
+            ) from exc
+
+        super().__init__(horizon)
+        self._lgb = lgb
+        self.n_lags = n_lags
+        self.n_estimators = n_estimators
+        self.max_depth = max_depth
+        self.learning_rate = learning_rate
+        self.num_leaves = num_leaves
+        self.random_state = random_state
+        self.preprocess_covariates = preprocess_covariates
+        self.verbose = verbose
+        self.lgb_params = lgb_params
+        self.models: list = []
+        self.covariate_preprocessor_: Optional[CovariatePreprocessor] = None
+        self._trained_with_covariates: bool = False
+        self._covariate_columns_: Optional[List] = None
+        self.last_values_: Optional[pd.DataFrame] = None
+
+    def get_params(self) -> dict:
+        return {
+            "n_lags": self.n_lags,
+            "n_estimators": self.n_estimators,
+            "max_depth": self.max_depth,
+            "learning_rate": self.learning_rate,
+            "num_leaves": self.num_leaves,
+            "horizon": self.horizon,
+            "random_state": self.random_state,
+            "preprocess_covariates": self.preprocess_covariates,
+            "verbose": self.verbose,
+            **self.lgb_params,
+        }
+
+    def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> "LightGBMForecaster":
+        self.feature_names = y.columns.tolist()
+        self._trained_with_covariates = X is not None
+
+        if X is not None and self.preprocess_covariates:
+            self.covariate_preprocessor_ = CovariatePreprocessor()
+            X = self.covariate_preprocessor_.fit_transform(X)
+        self._covariate_columns_ = list(X.columns) if X is not None else None
+
+        lag_df = _build_lag_df(y, self.n_lags)
+        self.last_values_ = y.iloc[-self.n_lags :].copy()
+
+        lgb = self._lgb
+
+        def _make():
+            return lgb.LGBMRegressor(
+                n_estimators=self.n_estimators,
+                max_depth=self.max_depth,
+                learning_rate=self.learning_rate,
+                num_leaves=self.num_leaves,
+                random_state=self.random_state,
+                verbose=self.verbose,
+                **self.lgb_params,
+            )
+
+        self.models = _direct_fit_loop(y, lag_df, X, self.horizon, _make)
+        self.is_fitted = True
+        return self
+
+    def predict(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before prediction.")
+        if self._trained_with_covariates:
+            if X is None:
+                raise ValueError("Model was trained with covariates; provide X for prediction.")
+            if self.covariate_preprocessor_ is not None:
+                X = self.covariate_preprocessor_.transform(X)
+            if self._covariate_columns_:
+                missing = set(self._covariate_columns_) - set(X.columns)
+                if missing:
+                    raise ValueError(f"Missing covariates for prediction: {sorted(missing)}")
+                X = X[self._covariate_columns_]
+        return _direct_predict_loop(
+            self.models, self.last_values_, self.feature_names,
+            self.n_lags, self._trained_with_covariates,
+            self._covariate_columns_, X,
+        )
+
+
+# ── CatBoostForecaster ───────────────────────────────────────────────────────
+
+class CatBoostForecaster(BaseForecaster):
+    """CatBoost forecaster with lag features and covariate support.
+
+    CatBoost often provides state-of-the-art accuracy with minimal hyperparameter
+    tuning, native handling of categorical features, and fast CPU inference.
+    Follows the same direct multi-step strategy as :class:`LightGBMForecaster`.
+
+    Parameters
+    ----------
+    n_lags : int, default=7
+        Number of lagged values used as features.
+    n_estimators : int, default=100
+        Number of boosting iterations.
+    depth : int, default=6
+        Depth of trees.
+    learning_rate : float, default=0.1
+        Boosting learning rate.
+    horizon : int, default=1
+        Forecast horizon.
+    random_state : int, default=42
+        Random seed.
+    preprocess_covariates : bool, default=True
+        Auto-encode categorical covariates.
+    verbose : int, default=0
+        CatBoost verbosity (0 = silent).
+    **cb_params
+        Extra keyword arguments forwarded to ``CatBoostRegressor``.
+    """
+
+    supports_covariates: bool = True
+
+    def __init__(
+        self,
+        n_lags: int = 7,
+        n_estimators: int = 100,
+        depth: int = 6,
+        learning_rate: float = 0.1,
+        horizon: int = 1,
+        random_state: int = 42,
+        preprocess_covariates: bool = True,
+        verbose: int = 0,
+        **cb_params,
+    ):
+        try:
+            _import_catboost()
+        except ImportError as exc:
+            raise ImportError(
+                "catboost is required for CatBoostForecaster. "
+                'Install with: pip install "autotsforecast[catboost]" '
+                "or: pip install catboost"
+            ) from exc
+
+        super().__init__(horizon)
+        self.n_lags = n_lags
+        self.n_estimators = n_estimators
+        self.depth = depth
+        self.learning_rate = learning_rate
+        self.random_state = random_state
+        self.preprocess_covariates = preprocess_covariates
+        self.verbose = verbose
+        self.cb_params = cb_params
+        self.models: list = []
+        self.covariate_preprocessor_: Optional[CovariatePreprocessor] = None
+        self._trained_with_covariates: bool = False
+        self._covariate_columns_: Optional[List] = None
+        self.last_values_: Optional[pd.DataFrame] = None
+
+    def get_params(self) -> dict:
+        return {
+            "n_lags": self.n_lags,
+            "n_estimators": self.n_estimators,
+            "depth": self.depth,
+            "learning_rate": self.learning_rate,
+            "horizon": self.horizon,
+            "random_state": self.random_state,
+            "preprocess_covariates": self.preprocess_covariates,
+            "verbose": self.verbose,
+            **self.cb_params,
+        }
+
+    def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> "CatBoostForecaster":
+        CatBoostRegressor = _import_catboost()
+
+        self.feature_names = y.columns.tolist()
+        self._trained_with_covariates = X is not None
+
+        if X is not None and self.preprocess_covariates:
+            self.covariate_preprocessor_ = CovariatePreprocessor()
+            X = self.covariate_preprocessor_.fit_transform(X)
+        self._covariate_columns_ = list(X.columns) if X is not None else None
+
+        lag_df = _build_lag_df(y, self.n_lags)
+        self.last_values_ = y.iloc[-self.n_lags :].copy()
+
+        def _make():
+            return CatBoostRegressor(
+                iterations=self.n_estimators,
+                depth=self.depth,
+                learning_rate=self.learning_rate,
+                random_seed=self.random_state,
+                verbose=self.verbose,
+                **self.cb_params,
+            )
+
+        self.models = _direct_fit_loop(y, lag_df, X, self.horizon, _make)
+        self.is_fitted = True
+        return self
+
+    def predict(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before prediction.")
+        if self._trained_with_covariates:
+            if X is None:
+                raise ValueError("Model was trained with covariates; provide X for prediction.")
+            if self.covariate_preprocessor_ is not None:
+                X = self.covariate_preprocessor_.transform(X)
+            if self._covariate_columns_:
+                missing = set(self._covariate_columns_) - set(X.columns)
+                if missing:
+                    raise ValueError(f"Missing covariates for prediction: {sorted(missing)}")
+                X = X[self._covariate_columns_]
+        return _direct_predict_loop(
+            self.models, self.last_values_, self.feature_names,
+            self.n_lags, self._trained_with_covariates,
+            self._covariate_columns_, X,
+        )
+
+
+# ── ElasticNetForecaster ─────────────────────────────────────────────────────
+
+class ElasticNetForecaster(BaseForecaster):
+    """ElasticNet regression forecaster with lag features.
+
+    A fast, interpretable linear forecaster with combined L1+L2 regularisation.
+    It works with or without covariates and is the recommended model for the
+    ``'fast'`` preset due to its near-instant training time.
+
+    Parameters
+    ----------
+    n_lags : int, default=7
+        Number of lagged values used as features.
+    alpha : float, default=0.01
+        Regularisation strength.
+    l1_ratio : float, default=0.5
+        Mixing parameter: 0 = Ridge, 1 = Lasso, 0.5 = ElasticNet.
+    horizon : int, default=1
+        Forecast horizon.
+    fit_intercept : bool, default=True
+        Whether to fit an intercept term.
+    preprocess_covariates : bool, default=True
+        Auto-encode categorical covariates.
+    random_state : int, default=42
+        Random seed (used for internal solvers).
+    """
+
+    supports_covariates: bool = True
+
+    def __init__(
+        self,
+        n_lags: int = 7,
+        alpha: float = 0.01,
+        l1_ratio: float = 0.5,
+        horizon: int = 1,
+        fit_intercept: bool = True,
+        preprocess_covariates: bool = True,
+        random_state: int = 42,
+    ):
+        try:
+            from sklearn.linear_model import ElasticNet  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "scikit-learn is required for ElasticNetForecaster. "
+                "Install with: pip install scikit-learn"
+            ) from exc
+
+        super().__init__(horizon)
+        self.n_lags = n_lags
+        self.alpha = alpha
+        self.l1_ratio = l1_ratio
+        self.fit_intercept = fit_intercept
+        self.preprocess_covariates = preprocess_covariates
+        self.random_state = random_state
+        self.models: list = []
+        self.covariate_preprocessor_: Optional[CovariatePreprocessor] = None
+        self._trained_with_covariates: bool = False
+        self._covariate_columns_: Optional[List] = None
+        self.last_values_: Optional[pd.DataFrame] = None
+
+    def get_params(self) -> dict:
+        return {
+            "n_lags": self.n_lags,
+            "alpha": self.alpha,
+            "l1_ratio": self.l1_ratio,
+            "horizon": self.horizon,
+            "fit_intercept": self.fit_intercept,
+            "preprocess_covariates": self.preprocess_covariates,
+            "random_state": self.random_state,
+        }
+
+    def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> "ElasticNetForecaster":
+        from sklearn.linear_model import ElasticNet
+
+        self.feature_names = y.columns.tolist()
+        self._trained_with_covariates = X is not None
+
+        if X is not None and self.preprocess_covariates:
+            self.covariate_preprocessor_ = CovariatePreprocessor()
+            X = self.covariate_preprocessor_.fit_transform(X)
+        self._covariate_columns_ = list(X.columns) if X is not None else None
+
+        lag_df = _build_lag_df(y, self.n_lags)
+        self.last_values_ = y.iloc[-self.n_lags :].copy()
+
+        def _make():
+            return ElasticNet(
+                alpha=self.alpha,
+                l1_ratio=self.l1_ratio,
+                fit_intercept=self.fit_intercept,
+                max_iter=3000,
+            )
+
+        self.models = _direct_fit_loop(y, lag_df, X, self.horizon, _make)
+        self.is_fitted = True
+        return self
+
+    def predict(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before prediction.")
+        if self._trained_with_covariates:
+            if X is None:
+                raise ValueError("Model was trained with covariates; provide X for prediction.")
+            if self.covariate_preprocessor_ is not None:
+                X = self.covariate_preprocessor_.transform(X)
+            if self._covariate_columns_:
+                missing = set(self._covariate_columns_) - set(X.columns)
+                if missing:
+                    raise ValueError(f"Missing covariates for prediction: {sorted(missing)}")
+                X = X[self._covariate_columns_]
+        return _direct_predict_loop(
+            self.models, self.last_values_, self.feature_names,
+            self.n_lags, self._trained_with_covariates,
+            self._covariate_columns_, X,
+        )
+
+
+# ── ThetaForecaster ──────────────────────────────────────────────────────────
+
+class ThetaForecaster(BaseForecaster):
+    """Theta method forecaster using statsmodels.
+
+    The Theta method placed first in the M3 forecasting competition and remains
+    one of the strongest statistical baselines for univariate series. It decomposes
+    the series into two *theta lines* and forecasts them individually before
+    recombining.
+
+    Parameters
+    ----------
+    horizon : int, default=1
+        Forecast horizon.
+    period : int, optional
+        Seasonal period (e.g., 7 for daily data with weekly seasonality).
+        If ``None``, auto-detected from the DatetimeIndex frequency.
+    deseasonalize : bool, default=True
+        Remove seasonality before fitting. Only applied when ``period > 1``.
+    """
+
+    supports_covariates: bool = False
+
+    def __init__(
+        self,
+        horizon: int = 1,
+        period: Optional[int] = None,
+        deseasonalize: bool = True,
+    ):
+        super().__init__(horizon)
+        self.period = period
+        self.deseasonalize = deseasonalize
+        self.models: dict = {}
+        self.last_date: Optional[pd.Timestamp] = None
+        self.freq_: Optional[str] = None
+
+    def get_params(self) -> dict:
+        return {
+            "horizon": self.horizon,
+            "period": self.period,
+            "deseasonalize": self.deseasonalize,
+        }
+
+    def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> "ThetaForecaster":
+        try:
+            from statsmodels.tsa.forecasting.theta import ThetaModel
+        except ImportError as exc:
+            raise ImportError(
+                "statsmodels>=0.12 is required for ThetaForecaster. "
+                "Install with: pip install statsmodels"
+            ) from exc
+
+        self.feature_names = y.columns.tolist()
+        if isinstance(y.index, pd.DatetimeIndex):
+            self.last_date = y.index[-1]
+            self.freq_ = pd.infer_freq(y.index) or "D"
+
+        # Auto-detect period from frequency
+        period = self.period
+        if period is None and self.deseasonalize and self.freq_ is not None:
+            _freq_period_map = {
+                "D": 7, "W": 52, "M": 12, "MS": 12, "ME": 12,
+                "Q": 4, "QS": 4, "QE": 4, "H": 24, "T": 60, "min": 60,
+            }
+            base = "".join(c for c in str(self.freq_) if c.isalpha())
+            period = _freq_period_map.get(base, 1)
+
+        self.models = {}
+        for col in y.columns:
+            series = y[col].astype(float)
+            use_seas = self.deseasonalize and period is not None and period > 1
+            try:
+                m = ThetaModel(
+                    series,
+                    period=period if use_seas else None,
+                    deseasonalize=use_seas,
+                )
+                self.models[col] = m.fit()
+            except Exception:
+                # Fallback without seasonality
+                self.models[col] = ThetaModel(series, period=None, deseasonalize=False).fit()
+
+        self.is_fitted = True
+        return self
+
+    def predict(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before prediction.")
+
+        predictions = {col: np.asarray(fitted.forecast(steps=self.horizon))
+                       for col, fitted in self.models.items()}
+
+        if self.last_date is not None:
+            freq = self.freq_ or "D"
+            future_dates = pd.date_range(
+                start=self.last_date + pd.tseries.frequencies.to_offset(freq),
+                periods=self.horizon,
+                freq=freq,
+            )
+            return pd.DataFrame(predictions, index=future_dates)
+        return pd.DataFrame(predictions)
+
+
+# ── CrostonForecaster ────────────────────────────────────────────────────────
+
+class CrostonForecaster(BaseForecaster):
+    """Croston's method for intermittent demand forecasting.
+
+    Specifically designed for sparse time series with many zeros.
+    Uses separate exponential smoothing for demand size and inter-demand
+    intervals. Includes optional SBA (Syntetos-Boylan Approximation) bias
+    correction, which is recommended in most practical applications.
+
+    Parameters
+    ----------
+    horizon : int, default=1
+        Forecast horizon.
+    alpha : float, default=0.1
+        Smoothing parameter applied to both demand size and intervals
+        (0 < alpha < 1).
+    method : str, default='sba'
+        ``'croston'`` — original Croston (1972).
+        ``'sba'`` — Syntetos-Boylan Approximation (typically lower bias).
+    """
+
+    supports_covariates: bool = False
+
+    def __init__(
+        self,
+        horizon: int = 1,
+        alpha: float = 0.1,
+        method: str = "sba",
+    ):
+        super().__init__(horizon)
+        self.alpha = alpha
+        self.method = method
+        self._rates: dict = {}
+        self.last_date: Optional[pd.Timestamp] = None
+        self.freq_: Optional[str] = None
+
+    def get_params(self) -> dict:
+        return {"horizon": self.horizon, "alpha": self.alpha, "method": self.method}
+
+    def _croston_rate(self, y_arr: np.ndarray) -> float:
+        """Fit Croston/SBA and return the per-period demand rate."""
+        nonzero_idx = np.nonzero(y_arr)[0]
+        if len(nonzero_idx) == 0:
+            return 0.0
+
+        d = float(y_arr[nonzero_idx[0]])   # demand level estimate
+        p = float(nonzero_idx[0] + 1)      # inter-demand interval estimate
+
+        for i in range(nonzero_idx[0] + 1, len(y_arr)):
+            if y_arr[i] > 0:
+                d = self.alpha * float(y_arr[i]) + (1 - self.alpha) * d
+                prev_nonzero = nonzero_idx[nonzero_idx < i]
+                interval = float(i - prev_nonzero[-1]) if len(prev_nonzero) else float(i + 1)
+                p = self.alpha * interval + (1 - self.alpha) * p
+
+        p = max(p, 1e-6)
+        rate = d / p
+        if self.method == "sba":
+            rate *= (1.0 - self.alpha / 2.0)
+        return float(rate)
+
+    def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> "CrostonForecaster":
+        self.feature_names = y.columns.tolist()
+        if isinstance(y.index, pd.DatetimeIndex):
+            self.last_date = y.index[-1]
+            self.freq_ = pd.infer_freq(y.index) or "D"
+
+        self._rates = {col: self._croston_rate(y[col].values.astype(float))
+                       for col in y.columns}
+        self.is_fitted = True
+        return self
+
+    def predict(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before prediction.")
+
+        preds = {col: [v] * self.horizon for col, v in self._rates.items()}
+        if self.last_date is not None:
+            freq = self.freq_ or "D"
+            future_dates = pd.date_range(
+                start=self.last_date + pd.tseries.frequencies.to_offset(freq),
+                periods=self.horizon,
+                freq=freq,
+            )
+            return pd.DataFrame(preds, index=future_dates)
+        return pd.DataFrame(preds)
+
+
+# ── Darts-based neural models (N-BEATS, N-HiTS, TFT) ────────────────────────
+
+def _darts_series(y_col: pd.DataFrame, freq: Optional[str]) -> "Any":
+    """Convert a single-column DataFrame to a Darts TimeSeries."""
+    _, TimeSeries = _import_darts_nbeats()
+    df = y_col.copy()
+    if isinstance(df.index, pd.DatetimeIndex) and freq:
+        try:
+            df = df.asfreq(freq)
+        except Exception:
+            pass
+    return TimeSeries.from_dataframe(df, fill_missing_dates=False)
+
+
+class NBEATSForecaster(BaseForecaster):
+    """N-BEATS forecaster (Neural Basis Expansion Analysis for Interpretable TS).
+
+    A pure deep-learning model that achieves state-of-the-art accuracy without
+    any manual feature engineering. Fits one N-BEATS model per series.
+
+    Requires ``pip install "autotsforecast[neural]"``.
+
+    Parameters
+    ----------
+    horizon : int, default=1
+        Forecast horizon (= ``output_chunk_length``).
+    n_lags : int, default=28
+        Lookback window (= ``input_chunk_length``). Should be ≥ 2 × horizon.
+    num_stacks : int, default=30
+        Number of N-BEATS stacks.
+    num_blocks : int, default=1
+        Number of blocks per stack.
+    num_layers : int, default=4
+        Fully-connected layers per block.
+    layer_widths : int, default=256
+        Width of each fully-connected layer.
+    n_epochs : int, default=100
+        Training epochs.
+    batch_size : int, default=32
+        Mini-batch size.
+    random_state : int, default=42
+        Random seed.
+    """
+
+    supports_covariates: bool = False
+
+    def __init__(
+        self,
+        horizon: int = 1,
+        n_lags: int = 28,
+        num_stacks: int = 30,
+        num_blocks: int = 1,
+        num_layers: int = 4,
+        layer_widths: int = 256,
+        n_epochs: int = 100,
+        batch_size: int = 32,
+        random_state: int = 42,
+    ):
+        try:
+            _import_darts_nbeats()
+        except ImportError as exc:
+            raise ImportError(
+                "darts is required for NBEATSForecaster. "
+                'Install with: pip install "autotsforecast[neural]"'
+            ) from exc
+
+        super().__init__(horizon)
+        self.n_lags = n_lags
+        self.num_stacks = num_stacks
+        self.num_blocks = num_blocks
+        self.num_layers = num_layers
+        self.layer_widths = layer_widths
+        self.n_epochs = n_epochs
+        self.batch_size = batch_size
+        self.random_state = random_state
+        self.models: dict = {}
+        self.last_date: Optional[pd.Timestamp] = None
+        self.freq_: Optional[str] = None
+
+    def get_params(self) -> dict:
+        return {
+            "horizon": self.horizon, "n_lags": self.n_lags,
+            "num_stacks": self.num_stacks, "num_blocks": self.num_blocks,
+            "num_layers": self.num_layers, "layer_widths": self.layer_widths,
+            "n_epochs": self.n_epochs, "batch_size": self.batch_size,
+            "random_state": self.random_state,
+        }
+
+    def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> "NBEATSForecaster":
+        NBEATSModel, _ = _import_darts_nbeats()
+        self.feature_names = y.columns.tolist()
+        if isinstance(y.index, pd.DatetimeIndex):
+            self.last_date = y.index[-1]
+            self.freq_ = pd.infer_freq(y.index) or "D"
+
+        self.models = {}
+        for col in y.columns:
+            ts = _darts_series(y[[col]], self.freq_)
+            m = NBEATSModel(
+                input_chunk_length=self.n_lags,
+                output_chunk_length=self.horizon,
+                num_stacks=self.num_stacks,
+                num_blocks=self.num_blocks,
+                num_layers=self.num_layers,
+                layer_widths=self.layer_widths,
+                n_epochs=self.n_epochs,
+                batch_size=self.batch_size,
+                random_state=self.random_state,
+                pl_trainer_kwargs={"enable_progress_bar": False},
+            )
+            m.fit(ts)
+            self.models[col] = m
+
+        self.is_fitted = True
+        return self
+
+    def predict(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before prediction.")
+
+        predictions = {col: m.predict(self.horizon).values().flatten()
+                       for col, m in self.models.items()}
+
+        if self.last_date is not None:
+            freq = self.freq_ or "D"
+            future_dates = pd.date_range(
+                start=self.last_date + pd.tseries.frequencies.to_offset(freq),
+                periods=self.horizon, freq=freq,
+            )
+            return pd.DataFrame(predictions, index=future_dates)
+        return pd.DataFrame(predictions)
+
+
+class NHiTSForecaster(BaseForecaster):
+    """N-HiTS forecaster (Neural Hierarchical Interpolation for Time Series).
+
+    N-HiTS improves on N-BEATS with hierarchical interpolation and multi-rate
+    data sampling, making it especially accurate for long-horizon forecasts at
+    a lower computational cost.
+
+    Requires ``pip install "autotsforecast[neural]"``.
+
+    Parameters
+    ----------
+    horizon : int, default=1
+        Forecast horizon.
+    n_lags : int, default=28
+        Lookback window. Should be ≥ 2 × horizon.
+    num_stacks : int, default=3
+        Number of N-HiTS stacks.
+    num_blocks : int, default=1
+        Blocks per stack.
+    num_layers : int, default=2
+        Fully-connected layers per block.
+    layer_widths : int, default=512
+        Width of each fully-connected layer.
+    n_epochs : int, default=100
+        Training epochs.
+    batch_size : int, default=32
+        Mini-batch size.
+    random_state : int, default=42
+        Random seed.
+    """
+
+    supports_covariates: bool = False
+
+    def __init__(
+        self,
+        horizon: int = 1,
+        n_lags: int = 28,
+        num_stacks: int = 3,
+        num_blocks: int = 1,
+        num_layers: int = 2,
+        layer_widths: int = 512,
+        n_epochs: int = 100,
+        batch_size: int = 32,
+        random_state: int = 42,
+    ):
+        try:
+            _import_darts_nhits()
+        except ImportError as exc:
+            raise ImportError(
+                "darts is required for NHiTSForecaster. "
+                'Install with: pip install "autotsforecast[neural]"'
+            ) from exc
+
+        super().__init__(horizon)
+        self.n_lags = n_lags
+        self.num_stacks = num_stacks
+        self.num_blocks = num_blocks
+        self.num_layers = num_layers
+        self.layer_widths = layer_widths
+        self.n_epochs = n_epochs
+        self.batch_size = batch_size
+        self.random_state = random_state
+        self.models: dict = {}
+        self.last_date: Optional[pd.Timestamp] = None
+        self.freq_: Optional[str] = None
+
+    def get_params(self) -> dict:
+        return {
+            "horizon": self.horizon, "n_lags": self.n_lags,
+            "num_stacks": self.num_stacks, "num_blocks": self.num_blocks,
+            "num_layers": self.num_layers, "layer_widths": self.layer_widths,
+            "n_epochs": self.n_epochs, "batch_size": self.batch_size,
+            "random_state": self.random_state,
+        }
+
+    def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> "NHiTSForecaster":
+        NHiTSModel, _ = _import_darts_nhits()
+        self.feature_names = y.columns.tolist()
+        if isinstance(y.index, pd.DatetimeIndex):
+            self.last_date = y.index[-1]
+            self.freq_ = pd.infer_freq(y.index) or "D"
+
+        self.models = {}
+        for col in y.columns:
+            ts = _darts_series(y[[col]], self.freq_)
+            m = NHiTSModel(
+                input_chunk_length=self.n_lags,
+                output_chunk_length=self.horizon,
+                num_stacks=self.num_stacks,
+                num_blocks=self.num_blocks,
+                num_layers=self.num_layers,
+                layer_widths=self.layer_widths,
+                n_epochs=self.n_epochs,
+                batch_size=self.batch_size,
+                random_state=self.random_state,
+                pl_trainer_kwargs={"enable_progress_bar": False},
+            )
+            m.fit(ts)
+            self.models[col] = m
+
+        self.is_fitted = True
+        return self
+
+    def predict(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before prediction.")
+
+        predictions = {col: m.predict(self.horizon).values().flatten()
+                       for col, m in self.models.items()}
+
+        if self.last_date is not None:
+            freq = self.freq_ or "D"
+            future_dates = pd.date_range(
+                start=self.last_date + pd.tseries.frequencies.to_offset(freq),
+                periods=self.horizon, freq=freq,
+            )
+            return pd.DataFrame(predictions, index=future_dates)
+        return pd.DataFrame(predictions)
+
+
+class TFTForecaster(BaseForecaster):
+    """Temporal Fusion Transformer (TFT) forecaster.
+
+    TFT is a powerful attention-based model designed for multi-horizon
+    forecasting with mixed types of inputs (static metadata, known future
+    inputs, and past covariates). It achieves strong results on tabular time
+    series benchmarks.
+
+    Requires ``pip install "autotsforecast[neural]"``.
+
+    Parameters
+    ----------
+    horizon : int, default=1
+        Forecast horizon (= ``output_chunk_length``).
+    n_lags : int, default=28
+        Lookback window (= ``input_chunk_length``).
+    hidden_size : int, default=16
+        Hidden state size.
+    lstm_layers : int, default=1
+        Number of LSTM encoder layers.
+    num_attention_heads : int, default=4
+        Multi-head attention heads.
+    dropout : float, default=0.1
+        Dropout rate.
+    n_epochs : int, default=100
+        Training epochs.
+    batch_size : int, default=32
+        Mini-batch size.
+    random_state : int, default=42
+        Random seed.
+    """
+
+    supports_covariates: bool = False  # future covariates require Darts TimeSeries API
+
+    def __init__(
+        self,
+        horizon: int = 1,
+        n_lags: int = 28,
+        hidden_size: int = 16,
+        lstm_layers: int = 1,
+        num_attention_heads: int = 4,
+        dropout: float = 0.1,
+        n_epochs: int = 100,
+        batch_size: int = 32,
+        random_state: int = 42,
+    ):
+        try:
+            _import_darts_tft()
+        except ImportError as exc:
+            raise ImportError(
+                "darts is required for TFTForecaster. "
+                'Install with: pip install "autotsforecast[neural]"'
+            ) from exc
+
+        super().__init__(horizon)
+        self.n_lags = n_lags
+        self.hidden_size = hidden_size
+        self.lstm_layers = lstm_layers
+        self.num_attention_heads = num_attention_heads
+        self.dropout = dropout
+        self.n_epochs = n_epochs
+        self.batch_size = batch_size
+        self.random_state = random_state
+        self.models: dict = {}
+        self.last_date: Optional[pd.Timestamp] = None
+        self.freq_: Optional[str] = None
+
+    def get_params(self) -> dict:
+        return {
+            "horizon": self.horizon, "n_lags": self.n_lags,
+            "hidden_size": self.hidden_size, "lstm_layers": self.lstm_layers,
+            "num_attention_heads": self.num_attention_heads,
+            "dropout": self.dropout, "n_epochs": self.n_epochs,
+            "batch_size": self.batch_size, "random_state": self.random_state,
+        }
+
+    def fit(self, y: pd.DataFrame, X: Optional[pd.DataFrame] = None) -> "TFTForecaster":
+        TFTModel, _ = _import_darts_tft()
+        self.feature_names = y.columns.tolist()
+        if isinstance(y.index, pd.DatetimeIndex):
+            self.last_date = y.index[-1]
+            self.freq_ = pd.infer_freq(y.index) or "D"
+
+        self.models = {}
+        for col in y.columns:
+            ts = _darts_series(y[[col]], self.freq_)
+            m = TFTModel(
+                input_chunk_length=self.n_lags,
+                output_chunk_length=self.horizon,
+                hidden_size=self.hidden_size,
+                lstm_layers=self.lstm_layers,
+                num_attention_heads=self.num_attention_heads,
+                dropout=self.dropout,
+                n_epochs=self.n_epochs,
+                batch_size=self.batch_size,
+                random_state=self.random_state,
+                pl_trainer_kwargs={"enable_progress_bar": False},
+            )
+            m.fit(ts)
+            self.models[col] = m
+
+        self.is_fitted = True
+        return self
+
+    def predict(self, X: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted before prediction.")
+
+        predictions = {col: m.predict(self.horizon).values().flatten()
+                       for col, m in self.models.items()}
+
+        if self.last_date is not None:
+            freq = self.freq_ or "D"
+            future_dates = pd.date_range(
+                start=self.last_date + pd.tseries.frequencies.to_offset(freq),
+                periods=self.horizon, freq=freq,
+            )
+            return pd.DataFrame(predictions, index=future_dates)
+        return pd.DataFrame(predictions)

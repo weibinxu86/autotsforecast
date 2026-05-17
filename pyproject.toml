@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autotsforecast"
-version = "0.5.0"
-description = "Agentic time series forecasting: MCP server, FastAPI, LangChain tools, anomaly detection, and auto model selection."
+version = "0.6.0"
+description = "Agentic time series forecasting with 16+ models, smart presets, parallel model search, dataset profiling, MCP, FastAPI, LangChain, and anomaly detection."
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
@@ -50,13 +50,23 @@ interpret = [
 ml = [
 	"xgboost>=2.0.0",
 ]
+boosting = [
+	"xgboost>=2.0.0",
+	"lightgbm>=3.0.0",
+	"catboost>=1.0.0",
+]
+lightgbm = [
+	"lightgbm>=3.0.0",
+]
+catboost = [
+	"catboost>=1.0.0",
+]
 prophet = [
 	"prophet>=1.1.0",
 ]
 neural = [
-	"darts>=0.27.0",
 	"torch>=2.0.0",
-	"lightning>=2.0.0",
+	"darts>=0.27.0",
 ]
 chronos = [
 	"chronos-forecasting>=2.2.0",
@@ -92,6 +102,8 @@ agentic = [
 	"fastapi>=0.110",
 	"uvicorn[standard]>=0.29",
 	"python-multipart>=0.0.9",
+	"langchain>=0.2",
+	"langchain-core>=0.2",
 ]
 dev = [
 	"pytest>=7.0.0",
@@ -104,19 +116,33 @@ dev = [
 	"nbformat>=5.0.0",
 ]
 all = [
+	# Visualization
 	"matplotlib>=3.4.0",
 	"seaborn>=0.11.0",
 	"plotly>=5.0.0",
+	# Progress
 	"rich>=12.0.0",
 	"tqdm>=4.60.0",
+	# Interpretability
 	"shap>=0.42.0",
-	"chronos-forecasting>=2.2.0",
-	"xgboost>=2.0.0",
-	"prophet>=1.1.0",
-	"darts>=0.27.0",
-	"torch>=2.0.0",
-	"lightning>=2.0.0",
+	# Calendar features
 	"holidays>=0.25",
+	# ML models
+	"xgboost>=2.0.0",
+	"lightgbm>=3.0.0",
+	"catboost>=1.0.0",
+	# Statistical models
+	"prophet>=1.1.0",
+	# Deep learning models
+	"torch>=2.0.0",
+	"darts>=0.27.0",
+	# Foundation models
+	"chronos-forecasting>=2.2.0",
+	# NLP insights
+	"openai>=1.0",
+	# Streamlit app
+	"streamlit>=1.30.0",
+	# Agentic AI
 	"mcp>=1.0.0",
 	"pydantic>=2.0",
 	"fastapi>=0.110",

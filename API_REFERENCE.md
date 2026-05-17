@@ -1,12 +1,16 @@
 # API Reference
 
-Complete parameter documentation for all models and classes in AutoTSForecast v0.4.0.
+Complete parameter documentation for all models and classes in AutoTSForecast v0.6.0.
 
 ## Table of Contents
 - [AutoForecaster](#autoforecaster)
   - [Per-Series Covariates](#per-series-covariates)
+  - [Presets and Budget Search](#presets-and-budget-search)
+  - [get_report()](#get_report)
+  - [profile_data()](#profile_data)
 - [Backtesting (Standalone Feature)](#backtesting)
 - [Forecasting Models](#forecasting-models)
+  - [New in v0.6.0](#new-in-v060)
 - [Hierarchical Reconciliation](#hierarchical-reconciliation)
 - [Interpretability Tools](#interpretability-tools)
 - [Preprocessing](#preprocessing)
@@ -25,14 +29,19 @@ Automatic model selection with cross-validation.
 
 | Parameter | Type | Default | Allowed Values | Description |
 |-----------|------|---------|----------------|-------------|
-| `candidate_models` | list | required | List of forecaster objects | Models to evaluate during selection |
+| `candidate_models` | list | `None` | List of forecaster objects | Models to evaluate. Required unless `preset` is set |
 | `metric` | str | `'rmse'` | `'rmse'`, `'mae'`, `'mape'`, `'mse'` | Metric for model selection |
 | `n_splits` | int | `5` | 2-10 | Number of cross-validation folds |
 | `test_size` | int | `20` | 1 to dataset_size/2 | Size of each validation window |
 | `window_type` | str | `'expanding'` | `'expanding'`, `'rolling'` | CV window type |
 | `verbose` | bool | `True` | `True`, `False` | Print progress messages |
 | `per_series_models` | bool | `False` | `True`, `False` | Select different model per series |
-| `n_jobs` | int | `1` | 1 to CPU_count, -1 | Parallel jobs (1 = sequential, -1 = all cores) |
+| `n_jobs` | int | `1` | 1 to CPU_count, -1 | Parallel jobs for candidate search and per-series fitting |
+| `preset` | str | `None` | `'fast'`, `'balanced'`, `'accuracy'`, `'zero_shot'`, `'intermittent'`, `'hierarchical'` | Auto-populate candidates from a named preset |
+| `horizon` | int | `None` | positive int | Required when `preset` is set |
+| `time_limit` | float | `None` | positive float | Stop model search after this many seconds |
+| `max_models` | int | `None` | positive int | Evaluate at most this many candidates |
+| `backtest_mode` | str | `'full'` | `'full'`, `'fast'`, `'last_fold'` | `'full'` = n_splits folds; `'fast'` = min(2, n_splits); `'last_fold'` = 1 fold |
 
 ### Methods
 
@@ -88,16 +97,99 @@ auto.fit(y_train, X=X_train_dict)
 forecasts = auto.forecast(X=X_test_dict)
 ```
 
-**Key Benefits:**
-- ✅ Each series uses only relevant features (reduces noise from irrelevant features)
-- ✅ Better accuracy through targeted feature engineering
-- ✅ Handles heterogeneous portfolios with different drivers
-- ✅ Backward compatible: still works with single DataFrame for all series
+---
 
-**Requirements:**
-- All series in `y` must have corresponding entries in the covariate dictionary
-- Each covariate DataFrame must have the same index as `y`
-- For forecasting, provide future covariates in the same dictionary format
+### Presets and Budget Search
+
+**New in v0.6.0** — Use a preset to skip building candidate lists manually.
+
+| Preset | Models | When to use |
+|--------|--------|-------------|
+| `fast` | Linear, MA, ElasticNet, LightGBM | < 60 s budget |
+| `balanced` | + RF, XGBoost, ARIMA, ETS, Theta | Default recommendation |
+| `accuracy` | All ML + NBEATS, NHiTS, TFT | Overnight runs |
+| `zero_shot` | Chronos-2 only | Cold-start / no training data |
+| `intermittent` | Croston, ElasticNet, LightGBM | Sparse demand |
+| `hierarchical` | VAR, RF, XGBoost, LightGBM | Multi-level hierarchies |
+
+```python
+# Preset usage
+auto = AutoForecaster(preset="balanced", horizon=14)
+
+# Budget-aware search
+auto = AutoForecaster(
+    preset="accuracy",
+    horizon=30,
+    n_jobs=-1,          # parallel candidates
+    time_limit=120,     # stop after 2 minutes
+    max_models=8,       # evaluate at most 8 models
+    backtest_mode="fast",  # 2 folds instead of 5
+)
+```
+
+---
+
+### get_report()
+
+```python
+auto.get_report() -> dict
+```
+
+Returns a structured model-selection report after `fit()`.
+
+**Keys:**
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `version` | str | Package version |
+| `preset` | str or None | Preset used |
+| `best_model` | str | Name of selected model |
+| `metric` | str | Selection metric |
+| `n_candidates_evaluated` | int | Number of models evaluated |
+| `backtest_config` | dict | n_splits, mode, test_size, etc. |
+| `model_ranking` | list | Ranked list with scores for all metrics |
+| `selection_rationale` | str | Human-readable explanation |
+| `forecast_horizon` | int | Horizon from winning model |
+
+```python
+# Pretty-print the report
+auto.print_report()
+```
+
+---
+
+### profile_data()
+
+```python
+AutoForecaster.profile_data(y: pd.DataFrame) -> ProfileResult
+```
+
+Static method. Profiles your dataset and recommends a preset before you call `fit()`.
+
+**ProfileResult attributes:**
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `n_series` | int | Number of series |
+| `n_obs` | int | Number of observations |
+| `freq` | str | Detected frequency |
+| `missing_rate` | float | Fraction of NaN values |
+| `zero_rate` | float | Fraction of zero values |
+| `mean_lag1_autocorr` | float | Average lag-1 autocorrelation |
+| `seasonality_detected` | bool | Whether seasonal pattern was found |
+| `is_intermittent` | bool | Whether zero_rate > 30% |
+| `is_short` | bool | Whether n_obs < 50 |
+| `recommended_preset` | str | Suggested preset |
+| `recommended_models` | list | Suggested model names |
+| `notes` | list | Human-readable rationale |
+
+```python
+result = AutoForecaster.profile_data(y_train)
+result.print_summary()
+# → recommended_preset: 'balanced'
+
+auto = AutoForecaster(preset=result.recommended_preset, horizon=14)
+```
 
 ---
 
@@ -215,6 +307,195 @@ print(f"Mean error: {errors.mean()}")
 ---
 
 ## Forecasting Models
+
+### New in v0.6.0
+
+Eight new models were added in v0.6.0. See full parameter docs below.
+
+| Model | Type | Covariates | Extra install |
+|-------|------|-----------|---------------|
+| `LightGBMForecaster` | ML (gradient boosting) | ✅ | `pip install "autotsforecast[lightgbm]"` |
+| `CatBoostForecaster` | ML (gradient boosting) | ✅ | `pip install "autotsforecast[catboost]"` |
+| `ElasticNetForecaster` | ML (regularised regression) | ✅ | included in base |
+| `ThetaForecaster` | Statistical | ❌ | included in base |
+| `CrostonForecaster` | Statistical (intermittent) | ❌ | included in base |
+| `NBEATSForecaster` | Deep learning | ❌ | `pip install "autotsforecast[neural]"` |
+| `NHiTSForecaster` | Deep learning | ❌ | `pip install "autotsforecast[neural]"` |
+| `TFTForecaster` | Deep learning | ❌ | `pip install "autotsforecast[neural]"` |
+
+---
+
+### LightGBMForecaster
+
+LightGBM gradient boosting with direct multi-step forecasting.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `horizon` | int | required | Forecast horizon |
+| `n_lags` | int | `14` | Number of lag features |
+| `n_estimators` | int | `300` | Number of trees |
+| `learning_rate` | float | `0.05` | Shrinkage rate |
+| `num_leaves` | int | `31` | Max leaves per tree |
+
+**Covariate Support:** Yes
+
+```python
+LightGBMForecaster(horizon=14, n_lags=14, n_estimators=300)
+```
+
+---
+
+### CatBoostForecaster
+
+CatBoost gradient boosting with direct multi-step forecasting.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `horizon` | int | required | Forecast horizon |
+| `n_lags` | int | `14` | Number of lag features |
+| `iterations` | int | `300` | Number of trees |
+| `learning_rate` | float | `0.05` | Shrinkage rate |
+| `depth` | int | `6` | Tree depth |
+
+**Covariate Support:** Yes
+
+```python
+CatBoostForecaster(horizon=14, n_lags=14, iterations=300)
+```
+
+---
+
+### ElasticNetForecaster
+
+Elastic-Net regularised regression with lag features. Fast and robust baseline.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `horizon` | int | required | Forecast horizon |
+| `n_lags` | int | `14` | Number of lag features |
+| `alpha` | float | `1.0` | Regularisation strength |
+| `l1_ratio` | float | `0.5` | Lasso vs. Ridge mix (0 = Ridge, 1 = Lasso) |
+
+**Covariate Support:** Yes
+
+```python
+ElasticNetForecaster(horizon=14, n_lags=14, alpha=0.5)
+```
+
+---
+
+### ThetaForecaster
+
+Theta method (statsmodels). Strong on seasonal data.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `horizon` | int | required | Forecast horizon |
+| `period` | int or None | `None` | Seasonal period. Auto-detected from freq if None |
+| `deseasonalize` | bool | `True` | Whether to deseasonalise before fitting |
+
+**Covariate Support:** No
+
+```python
+ThetaForecaster(horizon=12, period=12)  # monthly with yearly seasonality
+```
+
+---
+
+### CrostonForecaster
+
+Croston / SBA method for intermittent (sparse) demand forecasting.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `horizon` | int | required | Forecast horizon |
+| `alpha` | float | `0.1` | Smoothing parameter (0 < alpha < 1) |
+| `variant` | str | `'sba'` | `'sba'` (Syntetos–Boylan adjustment) or `'classic'` |
+
+**Covariate Support:** No
+
+```python
+CrostonForecaster(horizon=14, alpha=0.1, variant='sba')
+```
+
+---
+
+### NBEATSForecaster
+
+Neural Basis Expansion Analysis (N-BEATS) via Darts.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `horizon` | int | required | Forecast horizon |
+| `input_chunk_length` | int | `2 × horizon` | Look-back window |
+| `n_epochs` | int | `50` | Training epochs |
+
+**Covariate Support:** No
+
+**Requires:** `pip install "autotsforecast[neural]"`
+
+```python
+NBEATSForecaster(horizon=14, n_epochs=100)
+```
+
+---
+
+### NHiTSForecaster
+
+Neural Hierarchical Interpolation for Time Series (N-HiTS) via Darts.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `horizon` | int | required | Forecast horizon |
+| `input_chunk_length` | int | `2 × horizon` | Look-back window |
+| `n_epochs` | int | `50` | Training epochs |
+
+**Covariate Support:** No
+
+**Requires:** `pip install "autotsforecast[neural]"`
+
+```python
+NHiTSForecaster(horizon=14, n_epochs=100)
+```
+
+---
+
+### TFTForecaster
+
+Temporal Fusion Transformer via Darts.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `horizon` | int | required | Forecast horizon |
+| `input_chunk_length` | int | `2 × horizon` | Look-back window |
+| `hidden_size` | int | `64` | Hidden layer size |
+| `n_epochs` | int | `50` | Training epochs |
+
+**Covariate Support:** No
+
+**Requires:** `pip install "autotsforecast[neural]"`
+
+```python
+TFTForecaster(horizon=14, hidden_size=128, n_epochs=100)
+```
+
+---
 
 ### VARForecaster
 

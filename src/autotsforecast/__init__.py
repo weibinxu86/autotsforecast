@@ -27,14 +27,23 @@ from autotsforecast.models.external import (
     ProphetForecaster,
     ARIMAForecaster,
     ETSForecaster,
-    LSTMForecaster
+    LSTMForecaster,
+    # v0.6.0 new models
+    LightGBMForecaster,
+    CatBoostForecaster,
+    ElasticNetForecaster,
+    ThetaForecaster,
+    CrostonForecaster,
+    NBEATSForecaster,
+    NHiTSForecaster,
+    TFTForecaster,
 )
 
 # Core components
 from autotsforecast.backtesting.validator import BacktestValidator
 from autotsforecast.hierarchical.reconciliation import HierarchicalReconciler
 from autotsforecast.interpretability.drivers import DriverAnalyzer
-from autotsforecast.forecaster import AutoForecaster, get_default_candidate_models
+from autotsforecast.forecaster import AutoForecaster, get_default_candidate_models, PRESETS, get_preset_models, quick_forecast
 
 # New features: Calendar & Feature Engineering
 from autotsforecast.features.calendar import CalendarFeatures, add_calendar_features
@@ -57,6 +66,9 @@ from autotsforecast.visualization.progress import ProgressTracker, progress_bar
 
 # New features: Parallel Processing
 from autotsforecast.utils.parallel import ParallelForecaster, parallel_map, batch_forecast
+
+# v0.6.0: Dataset profiler
+from autotsforecast.utils.profiler import DatasetProfiler, ProfileResult
 
 # ── Agentic AI extensions (v0.5.0) ──────────────────────────────────────────
 
@@ -109,12 +121,23 @@ __all__ = [
     "ETSForecaster",
     "LSTMForecaster",
     "Chronos2Forecaster",
+    # v0.6.0 new models
+    "LightGBMForecaster",
+    "CatBoostForecaster",
+    "ElasticNetForecaster",
+    "ThetaForecaster",
+    "CrostonForecaster",
+    "NBEATSForecaster",
+    "NHiTSForecaster",
+    "TFTForecaster",
     # Core Components
     "ModelSelector",
     "BacktestValidator",
     "HierarchicalReconciler",
     "AutoForecaster",
     "get_default_candidate_models",
+    "PRESETS",
+    "get_preset_models",
     "DriverAnalyzer",
     # Feature Engineering
     "CalendarFeatures",
@@ -137,6 +160,9 @@ __all__ = [
     "ParallelForecaster",
     "parallel_map",
     "batch_forecast",
+    # v0.6.0: Dataset profiling
+    "DatasetProfiler",
+    "ProfileResult",
     # Agentic AI (v0.5.0)
     "AnomalyDetector",
     "InsightEngine",

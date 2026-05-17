@@ -38,6 +38,9 @@ env/
 Thumbs.db
 
 # Jupyter Notebook
+# VS Code workspace mirror (not canonical source — use src/ instead)
+/autotsforecast/
+
 .ipynb_checkpoints
 
 # Testing

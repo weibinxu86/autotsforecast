@@ -23,9 +23,9 @@ def preprocess_data(data: pd.DataFrame,
     
     # Handle missing values
     if handle_missing == 'forward_fill':
-        data = data.fillna(method='ffill')
+        data = data.ffill()
     elif handle_missing == 'backward_fill':
-        data = data.fillna(method='bfill')
+        data = data.bfill()
     elif handle_missing == 'interpolate':
         data = data.interpolate(method='linear')
     elif handle_missing == 'drop':

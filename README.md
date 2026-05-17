@@ -1,45 +1,140 @@
 # AutoTSForecast
 
-**Automated Time Series Forecasting with Per-Series Model Selection**
+**Automated Time Series Forecasting — 16+ Models, Smart Presets, AI-Native**
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI](https://img.shields.io/pypi/v/autotsforecast)](https://pypi.org/project/autotsforecast/)
 [![Tests](https://github.com/weibinxu86/autotsforecast/actions/workflows/tests.yml/badge.svg)](https://github.com/weibinxu86/autotsforecast/actions/workflows/tests.yml)
 
-AutoTSForecast automatically finds the best forecasting model for each of your time series. No more guessing whether Prophet, ARIMA, XGBoost, or **Chronos-2 foundation model** works best — let the algorithm decide. **New: Zero-shot forecasting with Chronos-2 — no training required, just pass your data and get state-of-the-art predictions!**
+AutoTSForecast automatically evaluates every model — statistical, ML, and deep learning — and picks the winner for your data. **One line to launch, one line to forecast.**
+
+```python
+from autotsforecast import AutoForecaster
+
+auto = AutoForecaster(preset="balanced", horizon=14)
+auto.fit(y_train)
+forecasts = auto.forecast()
+```
 
 ## 🚀 Key Features
 
 | Feature | Description | Benefit |
 |---------|-------------|---------|
-| **MCP Server** 🆕 | Plug into Claude Desktop, Cursor, Windsurf via Model Context Protocol | Any AI agent forecasts your data natively |
-| **OpenAI / Anthropic Tools** 🆕 | Ready-made function-calling schemas | GPT & Claude can call forecasting tools directly |
-| **LangChain Integration** 🆕 | `BaseTool` wrappers for any LangChain agent | Build agentic pipelines in minutes |
-| **FastAPI REST Service** 🆕 | HTTP endpoints for every forecasting operation | Language-agnostic agent integration |
-| **Anomaly Detection** 🆕 | Z-score, IQR, Isolation Forest, forecast-residual | Clean data before forecasting |
-| **NLP Insight Engine** 🆕 | Plain-English forecast summaries (rule-based + LLM) | Agents explain forecasts in natural language |
-| **Model Registry** 🆕 | Save, load, list, and delete fitted models locally | Fit once, reuse anywhere |
-| **Structured Outputs** 🆕 | Pydantic models for all results | Machine-readable, JSON-serialisable, agent-ready |
-| **Chronos-2 Foundation Model** | Zero-shot forecasting with pre-trained models (9M-710M params) | **No training needed** — just pass your data! |
-| **Per-Series Model Selection** | Automatically pick the best model for *each* series | Different series, different patterns → optimal accuracy |
-| **Per-Series Covariates** | Pass different features to different series | Products driven by different factors get custom features |
+| **Smart Presets** 🆕 | `fast`, `balanced`, `accuracy`, `zero_shot`, `intermittent` | Right model family in one word |
+| **16+ Models** 🆕 | LightGBM, CatBoost, NBEATS, NHiTS, TFT, Theta, Croston + classics | Best model always available |
+| **Dataset Profiler** 🆕 | Auto-detects seasonality, trend, intermittency | Recommends a preset before you fit |
+| **Parallel Model Search** 🆕 | `n_jobs=-1` evaluates all candidates simultaneously | 4–10× faster selection |
+| **Budget-Aware Search** 🆕 | `time_limit=60` and `max_models=5` | Stay within CI/serving constraints |
+| **Fast Backtest Modes** 🆕 | `backtest_mode='fast'` or `'last_fold'` | Trade accuracy for speed |
+| **Structured Report** 🆕 | `auto.get_report()` / `auto.print_report()` | Machine-readable model ranking |
+| **MCP Server** | Plug into Claude Desktop, Cursor, Windsurf | Any AI agent forecasts your data |
+| **OpenAI / Anthropic Tools** | Ready-made function-calling schemas | GPT & Claude call forecasting tools |
+| **LangChain Integration** | `BaseTool` wrappers for any LangChain agent | Build agentic pipelines in minutes |
+| **FastAPI REST Service** | HTTP endpoints for every operation | Language-agnostic agent integration |
+| **Anomaly Detection** | Z-score, IQR, Isolation Forest, forecast-residual | Clean data before forecasting |
+| **NLP Insight Engine** | Plain-English forecast summaries | Agents explain forecasts in natural language |
+| **Model Registry** | Save, load, list, delete fitted models | Fit once, reuse anywhere |
+| **Chronos-2 Foundation Model** | Zero-shot forecasting (9M–710M params) | No training needed |
+| **Per-Series Model Selection** | Best model for *each* series independently | Different patterns → optimal accuracy |
+| **Per-Series Covariates** | Different features per series | Custom drivers per product / region |
 | **Prediction Intervals** | Conformal prediction with coverage guarantees | Quantify uncertainty without assumptions |
-| **Calendar Features** | Auto-extract day-of-week, month, holidays | Handle seasonality automatically |
-| **Hierarchical Reconciliation** | Ensure forecasts add up (total = sum of parts) | Coherent forecasts across organizational levels |
+| **Calendar Features** | Day-of-week, month, holidays auto-extracted | Handle seasonality automatically |
+| **Hierarchical Reconciliation** | Forecasts add up (total = sum of parts) | Coherent across org levels |
 | **Parallel Processing** | Fit many series simultaneously | Scale to thousands of series |
-| **Interpretability** | Sensitivity analysis & SHAP | Understand what drives your forecasts |
+| **Interpretability** | Sensitivity analysis & SHAP | Understand what drives forecasts |
+
+## 🧩 All 16 Available Models
+
+| Model | Type | Covariates | Best For |
+|-------|------|-----------|----------|
+| `LinearForecaster` | Statistical | ✅ | Trend, fast baseline |
+| `MovingAverageForecaster` | Statistical | ❌ | Smooth series |
+| `VARForecaster` | Statistical | ✅ | Multivariate interdependencies |
+| `ARIMAForecaster` | Statistical | ❌ | Stationary, single series |
+| `ETSForecaster` | Statistical | ❌ | Seasonal decomposition |
+| `ThetaForecaster` 🆕 | Statistical | ❌ | Long seasonal series |
+| `CrostonForecaster` 🆕 | Statistical | ❌ | Intermittent / sparse demand |
+| `ElasticNetForecaster` 🆕 | ML | ✅ | Regularised regression, fast |
+| `RandomForestForecaster` | ML | ✅ | Non-linear, robust |
+| `XGBoostForecaster` | ML | ✅ | Tabular, high accuracy |
+| `LightGBMForecaster` 🆕 | ML | ✅ | Fast gradient boosting |
+| `CatBoostForecaster` 🆕 | ML | ✅ | Categorical features |
+| `LSTMForecaster` | Deep learning | ❌ | Long-range temporal patterns |
+| `NBEATSForecaster` 🆕 | Deep learning | ❌ | Interpretable neural forecasting |
+| `NHiTSForecaster` 🆕 | Deep learning | ❌ | Multi-scale neural forecasting |
+| `TFTForecaster` 🆕 | Deep learning | ❌ | Temporal fusion transformer |
+| `Chronos2Forecaster` | Foundation | ❌ | Zero-shot, no training needed |
+
+## ⚡ Quick Start with Presets
+
+```python
+from autotsforecast import AutoForecaster
+
+# Profile your data first (optional but helpful)
+report = AutoForecaster.profile_data(y_train)
+report.print_summary()
+# → recommended_preset: 'balanced'
+
+# One-line auto-selection
+auto = AutoForecaster(preset="balanced", horizon=14)
+auto.fit(y_train)
+forecasts = auto.forecast()
+
+# See ranked model leaderboard
+auto.print_report()
+```
+
+### Available presets
+
+| Preset | Models included | When to use |
+|--------|----------------|-------------|
+| `fast` | Linear, MA, ElasticNet, LightGBM | <60 s budget, short horizon |
+| `balanced` | Adds RF, XGBoost, ARIMA, ETS, Theta | Default recommendation |
+| `accuracy` | All ML + deep learning (NBEATS, NHiTS, TFT) | Overnight runs |
+| `zero_shot` | Chronos-2 only | No training data, cold start |
+| `intermittent` | Croston, ElasticNet, LightGBM | Sparse / lumpy demand |
+| `hierarchical` | VAR, RF, XGBoost, LightGBM | Multi-level org hierarchies |
+
+### Parallel & budget-aware search
+
+```python
+# Use all CPU cores; stop after 120 s; try at most 8 models
+auto = AutoForecaster(
+    preset="accuracy",
+    horizon=30,
+    n_jobs=-1,
+    time_limit=120,
+    max_models=8,
+    backtest_mode="fast",   # 2 folds instead of 5
+)
+auto.fit(y_train)
+
+# Structured machine-readable report
+report = auto.get_report()
+print(report["model_ranking"][0])  # best model info
+```
+
+## ✨ What's New in v0.6.0
+
+- **16 models** — added LightGBM, CatBoost, ElasticNet, Theta, Croston, NBEATS, NHiTS, TFT
+- **Smart presets** — `fast`, `balanced`, `accuracy`, `zero_shot`, `intermittent`, `hierarchical`
+- **Dataset profiler** — `AutoForecaster.profile_data(y)` detects seasonality, trend, and intermittency, then recommends a preset
+- **Parallel model search** — `n_jobs` now parallelises *across candidates*, not just series
+- **Budget-aware search** — `time_limit` and `max_models` keep search within CI or serving constraints
+- **Fast backtest modes** — `backtest_mode='fast'` (2 folds) and `'last_fold'` (1 fold)
+- **Structured report** — `get_report()` / `print_report()` return ranked leaderboard + selection rationale
 
 ## ✨ What's New in v0.5.0 — Agentic AI Edition
 
-- **🤖 MCP Server** — `autotsforecast-mcp` CLI connects directly to Claude Desktop, Cursor, and Windsurf. 7 tools: fit & forecast, backtest, prediction intervals, anomaly detection, calendar features, hierarchy reconciliation, model catalog.
-- **🔧 OpenAI & Anthropic Tool Schemas** — Drop-in `get_openai_tools()` / `get_anthropic_tools()` for GPT and Claude. `handle_tool_call()` dispatcher handles everything.
-- **🦜 LangChain Tools** — `get_autotsforecast_tools()` returns `BaseTool` instances for any LangChain ReAct or LCEL agent.
-- **🌐 FastAPI REST Service** — `autotsforecast-api` CLI starts an HTTP server at any host/port. 8 endpoints covering every operation.
-- **📡 Anomaly Detection** — `AnomalyDetector` with four methods. Detects outliers before forecasting to protect model accuracy.
-- **💬 InsightEngine** — Rule-based trend/risk analysis + optional LLM narrative for any LLM client.
-- **📦 ModelRegistry** — `registry.save(auto, name="v1")` / `registry.load("v1")` for local model persistence with JSON index.
-- **📐 Structured Outputs** — `auto.to_structured()` returns a Pydantic `ForecastResult`. All new APIs are JSON-serialisable.
+- **🤖 MCP Server** — `autotsforecast-mcp` CLI connects directly to Claude Desktop, Cursor, and Windsurf.
+- **🔧 OpenAI & Anthropic Tool Schemas** — Drop-in `get_openai_tools()` / `get_anthropic_tools()`.
+- **🦜 LangChain Tools** — `get_autotsforecast_tools()` for any LangChain agent.
+- **🌐 FastAPI REST Service** — `autotsforecast-api` CLI starts an HTTP server.
+- **📡 Anomaly Detection** — `AnomalyDetector` with four methods.
+- **💬 InsightEngine** — Rule-based trend/risk analysis + optional LLM narrative.
+- **📦 ModelRegistry** — `registry.save(auto, name="v1")` / `registry.load("v1")`.
+- **📐 Structured Outputs** — `auto.to_structured()` returns a Pydantic `ForecastResult`.
 
 ## ✨ What's New in v0.4.0
 
@@ -62,6 +157,22 @@ AutoTSForecast automatically finds the best forecasting model for each of your t
 - **⚡ Parallel Processing** — Speed up multi-series forecasting with joblib
 - **📈 Progress Tracking** — Rich progress bars for long-running operations
 
+## 📊 AutoTSForecast vs Alternatives
+
+| | **AutoTSForecast** | StatsForecast | NeuralForecast | AutoGluon-TS |
+|---|---|---|---|---|
+| Classical models | ✅ 7 | ✅ 20+ | ❌ | ✅ |
+| ML models | ✅ 5 (incl. LightGBM, CatBoost) | ❌ | ❌ | ✅ |
+| Deep learning | ✅ 4 (NBEATS, NHiTS, TFT, LSTM) | ❌ | ✅ | ✅ |
+| Foundation model | ✅ Chronos-2 | ❌ | ❌ | ✅ |
+| Smart presets | ✅ 6 | ❌ | ❌ | Partial |
+| Dataset profiler | ✅ | ❌ | ❌ | ❌ |
+| AI agent tools (MCP, LangChain) | ✅ | ❌ | ❌ | ❌ |
+| Per-series model selection | ✅ | ❌ | ❌ | ✅ |
+| Conformal intervals | ✅ | ✅ | ❌ | ❌ |
+| Time/model budget | ✅ | ❌ | ❌ | ✅ |
+| Pure Python install | ✅ | ✅ | ✅ | ❌ |
+
 ## Installation
 
 ### 🚀 Recommended: Install Everything
@@ -70,7 +181,7 @@ AutoTSForecast automatically finds the best forecasting model for each of your t
 pip install "autotsforecast[all]"
 ```
 
-This installs **all 10 models** plus visualization, interpretability, and new features.
+This installs **all 16 models** plus visualization, interpretability, and agent features.
 
 ### 🤖 Agentic AI Features (v0.5.0)
 
